@@ -1,0 +1,65 @@
+:root {
+  color-scheme: light dark;
+
+  /* brand */
+  --ink: #16302b;
+  --bg: #eef3f1;
+  --mango: #f0a030;
+  --leaf: #2f8a5b;
+  --coral: #d4553f;
+
+  /* roles */
+  --surface: #ffffff;
+  --surface-2: #e3ebe8;
+  --text: var(--ink);
+  --text-muted: #4f6560;
+  --line: #d3dedb;
+  --accent: var(--mango);
+  --on-accent: #16302b;
+  --primary: var(--ink);
+  --on-primary: #ffffff;
+  --success: var(--leaf);
+  --slip: var(--coral);
+  --slip-text: #b3402c;
+  --warn-bg: #fdecd0;
+  --warn-line: #f0a030;
+  --info-bg: #e0efe7;
+  --ring-fasting: var(--mango);
+  --ring-eating: var(--leaf);
+  --ring-track: #dde7e4;
+  --tile-none: #cfdad7;
+  --focus: #1b6fd6;
+  --shadow: 0 1px 2px rgb(22 48 43 / 6%), 0 4px 16px rgb(22 48 43 / 6%);
+
+  --font-head: 'Bricolage Grotesque Variable', 'Bricolage Grotesque', ui-rounded, system-ui, sans-serif;
+  --font-body: 'Figtree Variable', 'Figtree', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --radius: 18px;
+  --radius-sm: 12px;
+  --max: 520px;
+  --tabbar-h: 64px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1d1a;
+    --surface: #16302b;
+    --surface-2: #1f3d37;
+    --text: #e6efec;
+    --text-muted: #a3b8b2;
+    --line: #2b4a43;
+    --primary: #f0a030;
+    --on-primary: #16302b;
+    --success: #4fb482;
+    --slip: #e56f5a;
+    --slip-text: #f08e7c;
+    --warn-bg: #3a2d14;
+    --warn-line: #f0a030;
+    --info-bg: #173a2c;
+    --ring-eating: #4fb482;
+    --ring-track: #24433c;
+    --tile-none: #2f4c46;
+    --focus: #7fb8ff;
+    --shadow: none;
+  }
+}

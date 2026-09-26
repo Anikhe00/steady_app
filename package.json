@@ -1,0 +1,29 @@
+{
+  "name": "steady",
+  "version": "1.0.0",
+  "description": "Steady: a weight-loss tracker built around recovering from slips",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Anikhe00/steady_app.git"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^6.4.3",
+    "vite-plugin-pwa": "^1.3.0",
+    "vitest": "^5.0.2"
+  },
+  "dependencies": {
+    "@fontsource-variable/bricolage-grotesque": "^5.3.0",
+    "@fontsource-variable/figtree": "^5.3.0",
+    "idb-keyval": "^6.3.0"
+  },
+  "private": true,
+  "type": "module"
+}

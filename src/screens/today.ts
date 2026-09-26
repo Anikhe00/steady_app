@@ -1,0 +1,163 @@
+import * as db from '../lib/db';
+import { addDays, dateKey, fastingStatus, formatDuration } from '../lib/dates';
+import { dayCounted, streak, toDisplay } from '../lib/stats';
+import { EATING_HOURS, type Settings } from '../lib/types';
+import { esc, formatClock, formatDay, onAction } from '../ui/dom';
+import { openMealSheet, openShiftSheet, openSlipSheet, parseWeight } from '../ui/forms';
+import { ringHtml, updateRing } from '../ui/ring';
+import { toast } from '../ui/sheet';
+
+export function startFor(s: Settings) {
+  return (day: string) => db.data.days[day]?.shiftedStart ?? s.windowStart;
+}
+
+export function renderToday(root: HTMLElement): () => void {
+  const s = db.data.settings!;
+  const today = dateKey(new Date());
+  const yesterday = addDays(today, -1);
+  const log = db.day(today);
+  const st = streak(db.data, today);
+  const slippedToday = db.data.slips.some((x) => x.date === today);
+  const missedYesterday = st.missedYesterday && yesterday >= s.startDate;
+  const lastWeigh = [...db.data.weighIns].sort((a, b) => a.date.localeCompare(b.date)).at(-1);
+  const shifted = log.shiftedStart && log.shiftedStart !== s.windowStart;
+
+  root.innerHTML = `
+    <header class="screen-head">
+      <p class="eyebrow">${esc(formatDay(today))}</p>
+      <h1>Today</h1>
+      <p class="streak-chip" aria-label="Streak: ${st.streak} days">
+        <span aria-hidden="true">●</span> ${st.streak} day${st.streak === 1 ? '' : 's'} steady
+      </p>
+    </header>
+
+    ${
+      missedYesterday && dayCounted(db.data, today)
+        ? `<section class="banner info" role="status">
+            <strong>You bounced back.</strong>
+            <span>Yesterday was a miss and today you showed up anyway. That's the whole skill.</span>
+          </section>`
+        : missedYesterday
+        ? `<section class="banner warn" role="status">
+            <strong>Yesterday got away from you.</strong>
+            <span>That's one. The rule is never miss twice, so today is the day that matters. Tick off one thing and you're back on track.</span>
+          </section>`
+        : ''
+    }
+    ${
+      (missedYesterday || slippedToday) && s.why
+        ? `<section class="why-card" aria-label="Your why">
+            <p class="eyebrow">Remember why you started</p>
+            <blockquote>${esc(s.why)}</blockquote>
+          </section>`
+        : ''
+    }
+
+    <div class="banner info" data-closing hidden role="status"></div>
+
+    <section class="card ring-card" aria-label="Fasting window">
+      ${ringHtml()}
+      <p class="window-line">
+        ${shifted ? '<span class="tag">Shifted today</span>' : ''}
+        Window ${esc(formatClock(log.shiftedStart ?? s.windowStart))}, ${EATING_HOURS[s.plan]}h (${esc(s.plan)})
+      </p>
+      <button class="btn ghost small" data-action="shift">Shift today's window</button>
+    </section>
+
+    <section class="card" aria-labelledby="h-checklist">
+      <h2 id="h-checklist" class="card-title">Today's check-ins</h2>
+      <ul class="checklist">
+        <li><label class="check">
+          <input type="checkbox" id="kept" data-kept ${log.keptFast ? 'checked' : ''}>
+          <span class="box" aria-hidden="true"></span>
+          <span>Kept my fasting window</span>
+        </label></li>
+        ${s.habits
+          .map(
+            (h) => `<li><label class="check">
+              <input type="checkbox" id="habit-${esc(h.id)}" data-habit="${esc(h.id)}" ${log.habitsDone.includes(h.id) ? 'checked' : ''}>
+              <span class="box" aria-hidden="true"></span>
+              <span>${esc(h.label)}</span>
+            </label></li>`,
+          )
+          .join('')}
+      </ul>
+    </section>
+
+    <div class="row gap">
+      <button class="btn primary grow" data-action="meal">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        Log a meal
+      </button>
+      <button class="btn slip grow" data-action="slip">I slipped</button>
+    </div>
+
+    <section class="card" aria-labelledby="h-weigh">
+      <h2 id="h-weigh" class="card-title">Quick weigh-in</h2>
+      <form class="row gap weigh-form" data-weigh novalidate>
+        <label class="field grow">
+          <span class="sr-only">Weight in ${s.unit}</span>
+          <input id="weight" name="weight" inputmode="decimal" autocomplete="off" placeholder="0.0" aria-describedby="weigh-hint">
+        </label>
+        <span class="unit">${s.unit}</span>
+        <button class="btn primary" type="submit">Save</button>
+      </form>
+      <p id="weigh-hint" class="muted small">${
+        lastWeigh
+          ? `Last: ${toDisplay(lastWeigh.kg, s.unit).toFixed(1)} ${s.unit} on ${esc(formatDay(lastWeigh.date, { month: 'short', day: 'numeric' }))}. The trend matters more than any single number.`
+          : 'Weigh at the same time each morning for the clearest trend.'
+      }</p>
+    </section>
+  `;
+
+  onAction(root, {
+    shift: () => openShiftSheet(today, s.windowStart, log.shiftedStart ?? s.windowStart),
+    meal: () => openMealSheet(today),
+    slip: () => openSlipSheet(),
+  });
+
+  root.addEventListener('change', async (e) => {
+    const input = e.target as HTMLInputElement;
+    if (input.matches('[data-kept]')) {
+      await db.updateDay(today, { keptFast: input.checked });
+    } else if (input.dataset.habit) {
+      const done = new Set(db.day(today).habitsDone);
+      input.checked ? done.add(input.dataset.habit) : done.delete(input.dataset.habit);
+      await db.updateDay(today, { habitsDone: [...done] });
+    }
+  });
+
+  root.querySelector<HTMLFormElement>('[data-weigh]')!.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget as HTMLFormElement;
+    const input = form.elements.namedItem('weight') as HTMLInputElement;
+    const kg = parseWeight(input.value, s.unit);
+    if (kg === null) {
+      input.setAttribute('aria-invalid', 'true');
+      toast(`Enter your weight in ${s.unit}`, 'info');
+      input.focus();
+      return;
+    }
+    await db.addWeighIn({ date: today, kg });
+    toast('Weigh-in saved');
+  });
+
+  // Live countdown. Only the ring and the closing banner update; the rest of
+  // the screen re-renders on data changes.
+  const closing = root.querySelector<HTMLElement>('[data-closing]')!;
+  const tick = () => {
+    const now = new Date();
+    if (dateKey(now) !== today) {
+      window.dispatchEvent(new Event('steady:rerender'));
+      return;
+    }
+    const status = fastingStatus(now, EATING_HOURS[s.plan], startFor(s));
+    updateRing(root, status);
+    const soon = status.phase === 'eating' && status.remainingMs <= 3_600_000;
+    closing.hidden = !soon;
+    if (soon) closing.textContent = `Your eating window closes in ${formatDuration(status.remainingMs)}.`;
+  };
+  tick();
+  const timer = window.setInterval(tick, 15_000);
+  return () => clearInterval(timer);
+}

@@ -1,4 +1,5 @@
-export type FastingPlan = '12:12' | '14:10' | '16:8';
+/** '12:12' is no longer offered but kept so older saved settings and backups still work. */
+export type FastingPlan = '12:12' | '14:10' | '16:8' | '18:6' | '20:4';
 export type WeightUnit = 'kg' | 'lb';
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 export type Portion = 'small' | 'medium' | 'large';
@@ -82,6 +83,8 @@ export const EATING_HOURS: Record<FastingPlan, number> = {
   '12:12': 12,
   '14:10': 10,
   '16:8': 8,
+  '18:6': 6,
+  '20:4': 4,
 };
 
 export const TRIGGER_LABELS: Record<SlipTrigger, string> = {

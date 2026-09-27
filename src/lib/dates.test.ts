@@ -161,3 +161,22 @@ describe('weekOf', () => {
     expect(w[6]).toBe('2026-10-04');
   });
 });
+
+describe('fastingStatus with aggressive plans', () => {
+  it('20:4 opens at 14:00 and closes at 18:00', () => {
+    const eating = fastingStatus(local(2026, 9, 28, 17), 4, fixed('14:00'));
+    expect(eating.phase).toBe('eating');
+    expect(eating.end).toEqual(local(2026, 9, 28, 18));
+
+    const fasting = fastingStatus(local(2026, 9, 28, 19), 4, fixed('14:00'));
+    expect(fasting.phase).toBe('fasting');
+    expect(fasting.end).toEqual(local(2026, 9, 29, 14));
+    expect(fasting.progress).toBeCloseTo(1 / 20);
+  });
+
+  it('18:6 window running past midnight', () => {
+    const s = fastingStatus(local(2026, 9, 29, 0, 30), 6, fixed('20:00'));
+    expect(s.phase).toBe('eating');
+    expect(s.end).toEqual(local(2026, 9, 29, 2));
+  });
+});

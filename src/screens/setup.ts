@@ -7,9 +7,10 @@ import { esc, onAction } from '../ui/dom';
 import { confirmSheet, toast } from '../ui/sheet';
 
 const PLANS: { value: FastingPlan; label: string; hint: string }[] = [
-  { value: '12:12', label: '12:12', hint: 'Gentle start' },
-  { value: '14:10', label: '14:10', hint: 'Middle ground' },
+  { value: '14:10', label: '14:10', hint: 'Gentle start' },
   { value: '16:8', label: '16:8', hint: 'Most common' },
+  { value: '18:6', label: '18:6', hint: 'Stronger' },
+  { value: '20:4', label: '20:4', hint: 'Aggressive' },
 ];
 const SUGGESTIONS = ['Walked 20 minutes', 'Drank 2L of water', 'Veg with lunch', 'In bed by 11', 'No sugary drinks'];
 
@@ -54,7 +55,7 @@ export function renderSetup(root: HTMLElement, onboarding: boolean, onDone: () =
         <fieldset class="field">
           <legend class="card-title">Fasting plan</legend>
           <div class="plans">
-            ${PLANS.map(
+            ${(s.plan === '12:12' ? [{ value: '12:12' as const, label: '12:12', hint: 'Your current plan' }, ...PLANS] : PLANS).map(
               (p) => `<label class="plan">
                 <input type="radio" name="plan" value="${p.value}" ${s.plan === p.value ? 'checked' : ''}>
                 <span><strong>${p.label}</strong><small>${p.hint}</small></span>
@@ -169,7 +170,7 @@ export function renderSetup(root: HTMLElement, onboarding: boolean, onDone: () =
     await db.saveSettings({
       ...s,
       why,
-      plan: f.get('plan') as FastingPlan,
+      plan: (f.get('plan') as FastingPlan | null) ?? '16:8',
       windowStart: String(f.get('windowStart') || '12:00'),
       habits,
       unit: f.get('unit') as WeightUnit,

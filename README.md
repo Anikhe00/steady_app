@@ -36,6 +36,8 @@ src/styles/          tokens (light/dark) and app styles
 - A day counts if you kept your fasting window or did at least one habit.
   A slip never turns a day into a miss, and today is never a miss until it ends.
 - Streak: one missed day is forgiven, two in a row ends it.
+- In Setup you set when your fast starts. The fast end, eating window and next
+  fast start are worked out from the plan (14:10, 16:8, 18:6 or 20:4).
 - Weight is stored in kg and shown in your chosen unit. The trend line is the
   7-day rolling average; raw weigh-ins are the faint dots.
 - Every meal needs a photo. Photos are shrunk to 1280px JPEG, stored on the

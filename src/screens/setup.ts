@@ -1,9 +1,9 @@
 import * as db from '../lib/db';
 import { backupFileName, makeBackup, readBackup } from '../lib/backup';
-import { dateKey } from '../lib/dates';
+import { dateKey, fastStartFromWindow, scheduleFromFastStart } from '../lib/dates';
 import { isIos, isStandalone, notificationsSupported, requestPermission } from '../lib/reminders';
-import type { FastingPlan, Settings, WeightUnit } from '../lib/types';
-import { esc, onAction } from '../ui/dom';
+import { EATING_HOURS, type FastingPlan, type Settings, type WeightUnit } from '../lib/types';
+import { esc, formatClock, onAction } from '../ui/dom';
 import { blobToDataUrl, dataUrlToBlob } from '../ui/photo';
 import { confirmSheet, toast } from '../ui/sheet';
 
@@ -28,7 +28,7 @@ export function renderSetup(root: HTMLElement, onboarding: boolean, onDone: () =
   const s: Settings = db.data.settings ?? {
     why: '',
     plan: '16:8',
-    windowStart: '12:00',
+    windowStart: '12:00', // fast starts 8 PM on 16:8
     habits: [],
     unit: 'kg',
     remindersOn: false,
@@ -65,9 +65,10 @@ export function renderSetup(root: HTMLElement, onboarding: boolean, onDone: () =
           </div>
         </fieldset>
         <label class="field">
-          <span>Eating window starts at</span>
-          <input type="time" name="windowStart" value="${esc(s.windowStart)}" required>
+          <span>I start fasting at</span>
+          <input type="time" name="fastStart" value="${esc(fastStartFromWindow(s.windowStart, EATING_HOURS[s.plan]))}" required>
         </label>
+        <dl class="schedule" data-schedule aria-live="polite"></dl>
       </section>
 
       <section class="card stack">
@@ -142,6 +143,23 @@ export function renderSetup(root: HTMLElement, onboarding: boolean, onDone: () =
     restore: () => fileInput.click(),
   });
 
+  // The fast start is what you set; the rest of the day follows from the plan.
+  const schedule = () => {
+    const plan = (form.querySelector<HTMLInputElement>('input[name="plan"]:checked')?.value ?? '16:8') as FastingPlan;
+    return scheduleFromFastStart(form.fastStart.value || '20:00', EATING_HOURS[plan]);
+  };
+  const showSchedule = () => {
+    const d = schedule();
+    const t = (x: string) => esc(formatClock(x));
+    root.querySelector('[data-schedule]')!.innerHTML = `
+      <div><dt>Fast</dt><dd>${t(d.fastStart)} to ${t(d.fastEnd)} <span class="muted">(${d.fastingHours}h)</span></dd></div>
+      <div><dt>Eating</dt><dd>${t(d.fastEnd)} to ${t(d.windowClose)} <span class="muted">(${24 - d.fastingHours}h)</span></dd></div>
+      <div><dt>Next fast starts</dt><dd>${t(d.nextFastStart)}</dd></div>`;
+  };
+  form.fastStart.addEventListener('input', showSchedule);
+  form.querySelectorAll('input[name="plan"]').forEach((el) => el.addEventListener('change', showSchedule));
+  showSchedule();
+
   form.remindersOn.addEventListener('change', async () => {
     if (!form.remindersOn.checked) return;
     const result = await requestPermission();
@@ -172,7 +190,7 @@ export function renderSetup(root: HTMLElement, onboarding: boolean, onDone: () =
       ...s,
       why,
       plan: (f.get('plan') as FastingPlan | null) ?? '16:8',
-      windowStart: String(f.get('windowStart') || '12:00'),
+      windowStart: schedule().fastEnd,
       habits,
       unit: f.get('unit') as WeightUnit,
       remindersOn: f.get('remindersOn') === 'on',

@@ -697,6 +697,30 @@ input[aria-invalid='true'] {
   flex: 1;
 }
 
+.schedule {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.schedule div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.schedule dt {
+  font-weight: 600;
+}
+.schedule dd {
+  margin: 0;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------- meal photos */
 
 .photo-pick {

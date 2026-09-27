@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  addClock,
   addDays,
+  fastStartFromWindow,
+  scheduleFromFastStart,
   dateKey,
   fastingStatus,
   neverMissTwiceStreak,
@@ -178,5 +181,28 @@ describe('fastingStatus with aggressive plans', () => {
     const s = fastingStatus(local(2026, 9, 29, 0, 30), 6, fixed('20:00'));
     expect(s.phase).toBe('eating');
     expect(s.end).toEqual(local(2026, 9, 29, 2));
+  });
+});
+
+describe('schedule from fast start', () => {
+  it('wraps clock times around midnight', () => {
+    expect(addClock('20:00', 16)).toBe('12:00');
+    expect(addClock('01:30', -2)).toBe('23:30');
+  });
+
+  it('works out the day for each plan from an 8 PM fast start', () => {
+    expect(scheduleFromFastStart('20:00', 10)).toMatchObject({ fastEnd: '10:00', windowClose: '20:00', nextFastStart: '20:00', fastingHours: 14 });
+    expect(scheduleFromFastStart('20:00', 8).fastEnd).toBe('12:00');
+    expect(scheduleFromFastStart('20:00', 6).fastEnd).toBe('14:00');
+    expect(scheduleFromFastStart('20:00', 4).fastEnd).toBe('16:00');
+  });
+
+  it('handles a fast that starts after midnight', () => {
+    expect(scheduleFromFastStart('01:00', 8)).toMatchObject({ fastEnd: '17:00', windowClose: '01:00' });
+  });
+
+  it('round-trips with the stored window start', () => {
+    const { fastEnd } = scheduleFromFastStart('19:30', 6);
+    expect(fastStartFromWindow(fastEnd, 6)).toBe('19:30');
   });
 });

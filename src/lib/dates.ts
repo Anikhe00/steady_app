@@ -39,6 +39,33 @@ export function at(key: DateKey, t: ClockTime): Date {
 
 // ---------------------------------------------------------------- fasting
 
+/** A clock time moved by some hours, wrapping around midnight. */
+export function addClock(t: ClockTime, hours: number): ClockTime {
+  const { h, m } = parseClock(t);
+  const mins = (((h * 60 + m + Math.round(hours * 60)) % 1440) + 1440) % 1440;
+  return `${pad(Math.floor(mins / 60))}:${pad(mins % 60)}`;
+}
+
+export interface DailySchedule {
+  fastStart: ClockTime;
+  /** The fast ends when the eating window opens. */
+  fastEnd: ClockTime;
+  windowClose: ClockTime;
+  /** Same clock time as fastStart: the day repeats every 24h. */
+  nextFastStart: ClockTime;
+  fastingHours: number;
+}
+
+/** The whole day's plan from the time the fast starts. */
+export function scheduleFromFastStart(fastStart: ClockTime, eatingHours: number): DailySchedule {
+  const fastingHours = 24 - eatingHours;
+  const fastEnd = addClock(fastStart, fastingHours);
+  return { fastStart, fastEnd, windowClose: addClock(fastEnd, eatingHours), nextFastStart: fastStart, fastingHours };
+}
+
+/** The stored eating-window start implies when the fast starts. */
+export const fastStartFromWindow = (windowStart: ClockTime, eatingHours: number) => addClock(windowStart, eatingHours);
+
 export type FastingPhase = 'fasting' | 'eating';
 
 export interface FastingStatus {

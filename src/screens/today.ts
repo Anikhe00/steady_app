@@ -1,5 +1,5 @@
 import * as db from '../lib/db';
-import { addDays, dateKey, fastingStatus, formatDuration } from '../lib/dates';
+import { addClock, addDays, dateKey, fastingStatus, formatDuration } from '../lib/dates';
 import { dayCounted, streak, toDisplay } from '../lib/stats';
 import { EATING_HOURS, type Settings } from '../lib/types';
 import { esc, formatClock, formatDay, onAction } from '../ui/dom';
@@ -20,6 +20,7 @@ export function renderToday(root: HTMLElement): () => void {
   const slippedToday = db.data.slips.some((x) => x.date === today);
   const missedYesterday = st.missedYesterday && yesterday >= s.startDate;
   const lastWeigh = [...db.data.weighIns].sort((a, b) => a.date.localeCompare(b.date)).at(-1);
+  const todayOpen = log.shiftedStart ?? s.windowStart;
   const shifted = log.shiftedStart && log.shiftedStart !== s.windowStart;
 
   root.innerHTML = `
@@ -59,7 +60,7 @@ export function renderToday(root: HTMLElement): () => void {
       ${ringHtml()}
       <p class="window-line">
         ${shifted ? '<span class="tag">Shifted today</span>' : ''}
-        Window ${esc(formatClock(log.shiftedStart ?? s.windowStart))}, ${EATING_HOURS[s.plan]}h (${esc(s.plan)})
+        Eat ${esc(formatClock(todayOpen))} to ${esc(formatClock(addClock(todayOpen, EATING_HOURS[s.plan])))}, then fast (${esc(s.plan)})
       </p>
       <button class="btn ghost small" data-action="shift">Shift today's window</button>
     </section>

@@ -22,7 +22,36 @@ describe('backup', () => {
   it('round-trips through JSON', () => {
     const file = JSON.parse(JSON.stringify(makeBackup(sample)));
     const r = readBackup(file);
-    expect(r).toEqual({ ok: true, data: sample });
+    expect(r).toEqual({ ok: true, data: sample, photos: {} });
+  });
+
+  it('carries meal photos', () => {
+    const withPhoto: AppData = {
+      ...sample,
+      meals: [{ id: 'm1', date: '2026-09-28', time: '13:00', description: '', type: 'lunch', portion: 'medium', fullness: 3, brokeFast: true, hasPhoto: true }],
+    };
+    const photos = { m1: 'data:image/jpeg;base64,AAAA' };
+    const r = readBackup(JSON.parse(JSON.stringify(makeBackup(withPhoto, photos))));
+    expect(r).toEqual({ ok: true, data: withPhoto, photos });
+  });
+
+  it('restores version 1 files that have no photos', () => {
+    const v1 = { ...makeBackup(sample), version: 1, photos: undefined };
+    expect(readBackup(JSON.parse(JSON.stringify(v1))).ok).toBe(true);
+  });
+
+  it('drops the photo flag when the file lacks the photo', () => {
+    const withPhoto: AppData = {
+      ...sample,
+      meals: [{ id: 'm1', date: '2026-09-28', time: '13:00', description: 'x', type: 'lunch', portion: 'medium', fullness: 3, brokeFast: true, hasPhoto: true }],
+    };
+    const r = readBackup(JSON.parse(JSON.stringify(makeBackup(withPhoto))));
+    expect(r.ok && r.data.meals[0].hasPhoto).toBeFalsy();
+  });
+
+  it('rejects photos that are not images', () => {
+    const file = { ...makeBackup(sample), photos: { m1: 'javascript:alert(1)' } };
+    expect(readBackup(file).ok).toBe(false);
   });
 
   it('rejects files that are not Steady backups', () => {

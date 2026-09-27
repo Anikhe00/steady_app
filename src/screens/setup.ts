@@ -4,6 +4,7 @@ import { dateKey } from '../lib/dates';
 import { isIos, isStandalone, notificationsSupported, requestPermission } from '../lib/reminders';
 import type { FastingPlan, Settings, WeightUnit } from '../lib/types';
 import { esc, onAction } from '../ui/dom';
+import { blobToDataUrl, dataUrlToBlob } from '../ui/photo';
 import { confirmSheet, toast } from '../ui/sheet';
 
 const PLANS: { value: FastingPlan; label: string; hint: string }[] = [
@@ -192,7 +193,7 @@ export function renderSetup(root: HTMLElement, onboarding: boolean, onDone: () =
     }
     const r = readBackup(parsed);
     if (!r.ok) return toast(r.error, 'info');
-    const counts = `${r.data.meals.length} meals, ${r.data.slips.length} slips, ${r.data.weighIns.length} weigh-ins`;
+    const counts = `${r.data.meals.length} meals (${Object.keys(r.photos).length} photos), ${r.data.slips.length} slips, ${r.data.weighIns.length} weigh-ins`;
     const ok = await confirmSheet(
       'Restore this backup?',
       `It contains ${esc(counts)}. Everything currently in Steady on this phone will be replaced.`,
@@ -200,7 +201,13 @@ export function renderSetup(root: HTMLElement, onboarding: boolean, onDone: () =
       true,
     );
     if (!ok) return;
-    await db.replaceAll(r.data);
+    try {
+      const photos: Record<string, Blob> = {};
+      for (const [id, url] of Object.entries(r.photos)) photos[id] = await dataUrlToBlob(url);
+      await db.replaceAll(r.data, photos);
+    } catch {
+      return toast("Couldn't restore. Your phone may be low on storage.", 'info');
+    }
     toast('Backup restored');
     onDone();
   });
@@ -208,7 +215,9 @@ export function renderSetup(root: HTMLElement, onboarding: boolean, onDone: () =
 
 async function exportBackup(): Promise<void> {
   const name = backupFileName();
-  const json = JSON.stringify(makeBackup(db.data), null, 2);
+  const photos: Record<string, string> = {};
+  for (const [id, blob] of Object.entries(await db.allPhotos())) photos[id] = await blobToDataUrl(blob);
+  const json = JSON.stringify(makeBackup(db.data, photos));
   const file = new File([json], name, { type: 'application/json' });
   try {
     if (navigator.canShare?.({ files: [file] })) {

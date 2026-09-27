@@ -697,6 +697,73 @@ input[aria-invalid='true'] {
   flex: 1;
 }
 
+/* ---------- meal photos */
+
+.photo-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1.5px dashed var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+.photo-pick img {
+  width: 100%;
+  max-height: 260px;
+  object-fit: cover;
+  border-radius: 10px;
+}
+.photo-pick img[hidden] {
+  display: none;
+}
+.photo-btn {
+  position: relative;
+  overflow: hidden;
+}
+.photo-btn input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  font-size: 0;
+}
+.photo-btn:focus-within {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.btn:disabled {
+  opacity: 0.6;
+}
+
+.thumb {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.entry.has-photo {
+  padding-left: 8px;
+  align-items: center;
+}
+.photo-full {
+  width: 100%;
+  border-radius: var(--radius-sm);
+  margin-bottom: 10px;
+  display: block;
+}
+
 /* ---------- progress */
 
 .week {

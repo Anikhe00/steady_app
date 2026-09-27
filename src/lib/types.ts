@@ -49,6 +49,8 @@ export interface Meal {
   portion: Portion;
   fullness: 1 | 2 | 3 | 4 | 5;
   brokeFast: boolean;
+  /** A photo is stored separately under this meal's id. */
+  hasPhoto?: boolean;
 }
 
 export interface Slip {
@@ -75,8 +77,11 @@ export interface AppData {
 
 export interface Backup extends AppData {
   app: 'steady';
-  version: 1;
+  /** 2 added meal photos; version 1 files still restore. */
+  version: 1 | 2;
   exportedAt: string;
+  /** Meal id -> image as a data: URL. */
+  photos?: Record<string, string>;
 }
 
 export const EATING_HOURS: Record<FastingPlan, number> = {

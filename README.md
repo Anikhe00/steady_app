@@ -38,6 +38,8 @@ src/styles/          tokens (light/dark) and app styles
 - Streak: one missed day is forgiven, two in a row ends it.
 - Weight is stored in kg and shown in your chosen unit. The trend line is the
   7-day rolling average; raw weigh-ins are the faint dots.
+- Every meal needs a photo. Photos are shrunk to 1280px JPEG, stored on the
+  phone in IndexedDB, and included in the JSON backup.
 - Reminders fire 1 hour before the eating window closes, while the app is open
   or in the background. With no push server, a fully closed app can't notify,
   so the Today screen also shows a banner in the last hour.

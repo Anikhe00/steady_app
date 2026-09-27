@@ -3,6 +3,7 @@ import { clockTime, dateKey } from '../lib/dates';
 import { fromDisplay } from '../lib/stats';
 import { TRIGGER_LABELS, type MealType, type Portion, type SlipTrigger } from '../lib/types';
 import { esc, formatClock } from './dom';
+import { compressPhoto } from './photo';
 import { openSheet, toast } from './sheet';
 
 const MEAL_TYPES: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -31,12 +32,32 @@ function chips(name: string, options: { value: string; label: string }[], select
 export function openMealSheet(date = dateKey(new Date())): void {
   const now = clockTime(new Date());
   const firstOfDay = !db.data.meals.some((m) => m.date === date);
+  let photo: Blob | null = null;
+  let previewUrl: string | null = null;
   const s = openSheet(
     'Log a meal',
     `<form class="stack" novalidate>
+      <fieldset class="field">
+        <legend>Photo of your plate</legend>
+        <div class="photo-pick" data-photo-box>
+          <img alt="Your meal photo" data-preview hidden>
+          <p class="muted small" data-photo-hint>A photo shows exactly what and how much you ate, so there's nothing to guess later.</p>
+          <div class="row gap">
+            <label class="btn primary grow photo-btn">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+              <span data-take-label>Take photo</span>
+              <input type="file" accept="image/*" capture="environment" data-photo-input>
+            </label>
+            <label class="btn ghost grow photo-btn">
+              <span>From gallery</span>
+              <input type="file" accept="image/*" data-photo-input>
+            </label>
+          </div>
+        </div>
+      </fieldset>
       <label class="field">
-        <span>What did you eat?</span>
-        <input name="description" required maxlength="200" autocomplete="off" placeholder="e.g. Rice, beans and plantain">
+        <span>What's in it? <span class="muted">(optional)</span></span>
+        <input name="description" maxlength="200" autocomplete="off" placeholder="e.g. Rice, beans and plantain">
       </label>
       <fieldset class="field"><legend>Meal</legend>
         ${chips('type', MEAL_TYPES.map((t) => ({ value: t, label: cap(t) })), guessMealType(now))}
@@ -58,28 +79,67 @@ export function openMealSheet(date = dateKey(new Date())): void {
       <p class="form-error" role="alert" hidden></p>
       <button class="btn primary block" type="submit">Save meal</button>
     </form>`,
+    () => previewUrl && URL.revokeObjectURL(previewUrl),
   );
   const form = s.body.querySelector('form')!;
-  const desc = form.elements.namedItem('description') as HTMLInputElement;
-  desc.focus();
+  const preview = form.querySelector<HTMLImageElement>('[data-preview]')!;
+  const hint = form.querySelector<HTMLElement>('[data-photo-hint]')!;
+  const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+
+  form.querySelectorAll<HTMLInputElement>('[data-photo-input]').forEach((input) =>
+    input.addEventListener('change', async () => {
+      const file = input.files?.[0];
+      input.value = '';
+      if (!file) return;
+      submit.disabled = true;
+      hint.textContent = 'Preparing photo…';
+      try {
+        photo = await compressPhoto(file);
+      } catch {
+        photo = null;
+        hint.textContent = "That photo couldn't be read. Try taking it again.";
+        submit.disabled = false;
+        return;
+      }
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      previewUrl = URL.createObjectURL(photo);
+      preview.src = previewUrl;
+      preview.hidden = false;
+      hint.hidden = true;
+      form.querySelector('[data-take-label]')!.textContent = 'Retake';
+      form.querySelector<HTMLElement>('.form-error')!.hidden = true;
+      submit.disabled = false;
+    }),
+  );
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const f = new FormData(form);
-    const description = String(f.get('description') ?? '').trim();
-    if (!description) {
-      showError(form, 'Add a short description of the meal.');
-      desc.focus();
+    if (!photo) {
+      showError(form, 'Add a photo of your meal first.');
+      form.querySelector<HTMLElement>('[data-photo-box]')!.scrollIntoView({ block: 'center' });
       return;
     }
-    await db.addMeal({
-      date: String(f.get('date')),
-      time: String(f.get('time')),
-      description,
-      type: f.get('type') as MealType,
-      portion: f.get('portion') as Portion,
-      fullness: Number(f.get('fullness')) as 1 | 2 | 3 | 4 | 5,
-      brokeFast: f.get('brokeFast') === 'on',
-    });
+    const f = new FormData(form);
+    const type = f.get('type') as MealType;
+    submit.disabled = true;
+    try {
+      await db.addMeal(
+        {
+          date: String(f.get('date')),
+          time: String(f.get('time')),
+          description: String(f.get('description') ?? '').trim(),
+          type,
+          portion: f.get('portion') as Portion,
+          fullness: Number(f.get('fullness')) as 1 | 2 | 3 | 4 | 5,
+          brokeFast: f.get('brokeFast') === 'on',
+        },
+        photo,
+      );
+    } catch {
+      submit.disabled = false;
+      showError(form, "Couldn't save. Your phone may be low on storage.");
+      return;
+    }
     s.close();
     toast('Meal logged');
   });

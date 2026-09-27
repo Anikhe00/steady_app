@@ -1,15 +1,20 @@
 import * as db from '../lib/db';
 import { addDays, dateKey } from '../lib/dates';
-import { TRIGGER_LABELS } from '../lib/types';
+import { TRIGGER_LABELS, type Meal } from '../lib/types';
 import { esc, formatClock, formatDay, onAction } from '../ui/dom';
 import { openMealSheet } from '../ui/forms';
-import { confirmSheet, toast } from '../ui/sheet';
+import { confirmSheet, openSheet, toast } from '../ui/sheet';
 
 let selected: string | null = null;
+let photoUrls: string[] = [];
+
+const mealTitle = (m: Meal) => m.description || m.type[0].toUpperCase() + m.type.slice(1);
 
 const FULL_LABEL = ['', 'Still hungry', 'Light', 'Satisfied', 'Full', 'Stuffed'];
 
 export function renderFood(root: HTMLElement): void {
+  photoUrls.forEach((u) => URL.revokeObjectURL(u));
+  photoUrls = [];
   const today = dateKey(new Date());
   const start = db.data.settings!.startDate;
   const day = selected && selected <= today ? selected : today;
@@ -46,13 +51,20 @@ export function renderFood(root: HTMLElement): void {
       meals.length
         ? `<ul class="entries" aria-label="Meals">${meals
             .map(
-              (m) => `<li class="entry">
+              (m) => `<li class="entry${m.hasPhoto ? ' has-photo' : ''}">
+                ${
+                  m.hasPhoto
+                    ? `<button class="thumb" data-action="view-photo" data-id="${esc(m.id)}" aria-label="View photo of ${esc(mealTitle(m))}">
+                        <img alt="" data-photo="${esc(m.id)}">
+                      </button>`
+                    : ''
+                }
                 <div class="entry-main">
                   <p class="entry-meta">${esc(formatClock(m.time))} · ${esc(m.type)}${m.brokeFast ? ' · <span class="tag">broke fast</span>' : ''}</p>
-                  <p class="entry-title">${esc(m.description)}</p>
+                  <p class="entry-title">${esc(mealTitle(m))}</p>
                   <p class="muted small">${esc(m.portion)} portion · fullness ${m.fullness}/5, ${esc(FULL_LABEL[m.fullness])}</p>
                 </div>
-                <button class="icon-btn" data-action="del-meal" data-id="${esc(m.id)}" aria-label="Delete ${esc(m.description)}">
+                <button class="icon-btn" data-action="del-meal" data-id="${esc(m.id)}" aria-label="Delete ${esc(mealTitle(m))}">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></svg>
                 </button>
               </li>`,
@@ -97,12 +109,33 @@ export function renderFood(root: HTMLElement): void {
         toast('Meal deleted');
       }
     },
+    'view-photo': async (el) => {
+      const meal = db.data.meals.find((m) => m.id === el.dataset.id);
+      const blob = meal && (await db.getPhoto(meal.id));
+      if (!meal || !blob) return toast('Photo not found', 'info');
+      const url = URL.createObjectURL(blob);
+      openSheet(
+        esc(mealTitle(meal)),
+        `<img class="photo-full" src="${url}" alt="Photo of ${esc(mealTitle(meal))}">
+         <p class="muted small">${esc(formatClock(meal.time))} · ${esc(meal.portion)} portion · fullness ${meal.fullness}/5</p>`,
+        () => URL.revokeObjectURL(url),
+      );
+    },
     'del-slip': async (el) => {
       if (await confirmSheet('Delete slip?', 'This removes it from your log.', 'Delete', true)) {
         await db.deleteSlip(el.dataset.id!);
         toast('Slip deleted');
       }
     },
+  });
+
+  // Photos load after the list renders; each is a Blob in IndexedDB.
+  root.querySelectorAll<HTMLImageElement>('img[data-photo]').forEach(async (img) => {
+    const blob = await db.getPhoto(img.dataset.photo!);
+    if (!blob || !img.isConnected) return;
+    const url = URL.createObjectURL(blob);
+    photoUrls.push(url);
+    img.src = url;
   });
 
   root.querySelector<HTMLInputElement>('[data-date]')!.addEventListener('change', (e) => {

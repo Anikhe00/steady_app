@@ -1,9 +1,11 @@
-import { createStore, get, set, setMany, getMany } from 'idb-keyval';
+import { createStore, del, delMany, get, getMany, keys, set, setMany } from 'idb-keyval';
 import type { AppData, DateKey, DayLog, Meal, Settings, Slip, WeighIn } from './types';
 
 // One IndexedDB object store, one key per collection. The whole data set is
 // small (a year is well under a megabyte), so it is loaded into memory on boot
-// and each change writes back just the collection it touched.
+// and each change writes back just the collection it touched. Meal photos are
+// the exception: each is a Blob under its own "photo:<mealId>" key, read only
+// when shown.
 
 const store = createStore('steady', 'data');
 const KEYS = ['settings', 'days', 'meals', 'slips', 'weighIns'] as const;
@@ -57,14 +59,32 @@ export async function updateDay(date: DateKey, patch: Partial<DayLog>): Promise<
   await save('days');
 }
 
-export async function addMeal(m: Omit<Meal, 'id'>): Promise<void> {
-  data.meals.push({ ...m, id: uid() });
+const photoKey = (mealId: string) => `photo:${mealId}`;
+
+export async function addMeal(m: Omit<Meal, 'id' | 'hasPhoto'>, photo?: Blob): Promise<void> {
+  const id = uid();
+  // Photo first, so a meal never points at a photo that failed to save.
+  if (photo) await set(photoKey(id), photo, store);
+  data.meals.push({ ...m, id, ...(photo ? { hasPhoto: true } : {}) });
   await save('meals');
 }
 
 export async function deleteMeal(id: string): Promise<void> {
   data.meals = data.meals.filter((m) => m.id !== id);
   await save('meals');
+  await del(photoKey(id), store);
+}
+
+export function getPhoto(mealId: string): Promise<Blob | undefined> {
+  return get<Blob>(photoKey(mealId), store);
+}
+
+export async function allPhotos(): Promise<Record<string, Blob>> {
+  const ids = data.meals.filter((m) => m.hasPhoto).map((m) => m.id);
+  const blobs = await getMany<Blob | undefined>(ids.map(photoKey), store);
+  const out: Record<string, Blob> = {};
+  ids.forEach((id, i) => blobs[i] && (out[id] = blobs[i]!));
+  return out;
 }
 
 export async function addSlip(s: Omit<Slip, 'id'>): Promise<void> {
@@ -88,7 +108,10 @@ export async function deleteWeighIn(id: string): Promise<void> {
 }
 
 /** Replace everything (used by restore). */
-export async function replaceAll(next: AppData): Promise<void> {
+export async function replaceAll(next: AppData, photos: Record<string, Blob> = {}): Promise<void> {
+  const old = (await keys(store)).filter((k) => String(k).startsWith('photo:'));
+  await delMany(old, store);
+  await setMany(Object.entries(photos).map(([id, blob]) => [photoKey(id), blob]), store);
   Object.assign(data, next);
   await save(...KEYS);
 }

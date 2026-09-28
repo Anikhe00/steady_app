@@ -38,6 +38,9 @@ src/styles/          tokens (light/dark) and app styles
 - Streak: one missed day is forgiven, two in a row ends it.
 - In Setup you set when your fast starts. The fast end, eating window and next
   fast start are worked out from the plan (14:10, 16:8, 18:6 or 20:4).
+- While fasting, the Today ring shows time fasted, time remaining, start and
+  end, and tappable markers for body stages (src/lib/stages.ts). Stage
+  timings are rough averages, and the app says so.
 - Weight is stored in kg and shown in your chosen unit. The trend line is the
   7-day rolling average; raw weigh-ins are the faint dots.
 - Every meal needs a photo. Photos are shrunk to 1280px JPEG, stored on the

@@ -4,8 +4,9 @@ import { dayCounted, streak, toDisplay } from '../lib/stats';
 import { EATING_HOURS, type Settings } from '../lib/types';
 import { esc, formatClock, formatDay, onAction } from '../ui/dom';
 import { openMealSheet, openShiftSheet, openSlipSheet, parseWeight } from '../ui/forms';
-import { ringHtml, updateRing } from '../ui/ring';
-import { toast } from '../ui/sheet';
+import { STAGES } from '../lib/stages';
+import { ringHtml, stageSheetHtml, updateRing } from '../ui/ring';
+import { openSheet, toast } from '../ui/sheet';
 
 export function startFor(s: Settings) {
   return (day: string) => db.data.days[day]?.shiftedStart ?? s.windowStart;
@@ -115,6 +116,12 @@ export function renderToday(root: HTMLElement): () => void {
     shift: () => openShiftSheet(today, s.windowStart, log.shiftedStart ?? s.windowStart),
     meal: () => openMealSheet(today),
     slip: () => openSlipSheet(),
+    stage: (el) => {
+      const st = STAGES.find((x) => x.id === el.dataset.stage);
+      if (!st) return;
+      const status = fastingStatus(new Date(), EATING_HOURS[s.plan], startFor(s));
+      openSheet(`<span aria-hidden="true">${st.icon}</span> ${esc(st.title)}`, stageSheetHtml(st, status));
+    },
   });
 
   root.addEventListener('change', async (e) => {
@@ -159,6 +166,6 @@ export function renderToday(root: HTMLElement): () => void {
     if (soon) closing.textContent = `Your eating window closes in ${formatDuration(status.remainingMs)}.`;
   };
   tick();
-  const timer = window.setInterval(tick, 15_000);
+  const timer = window.setInterval(tick, 1000);
   return () => clearInterval(timer);
 }

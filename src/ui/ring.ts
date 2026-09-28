@@ -1,4 +1,4 @@
-import type { FastingStatus } from '../lib/dates';
+import type { FastState } from '../lib/fasting';
 import { addDays, dateKey, formatDuration } from '../lib/dates';
 import { stageAt, stagesFor, type FastStage } from '../lib/stages';
 import { esc, formatTime } from './dom';
@@ -56,7 +56,7 @@ const elapsedText = (ms: number) => {
   return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`;
 };
 
-export function updateRing(root: HTMLElement, s: FastingStatus, now = new Date()): void {
+export function updateRing(root: HTMLElement, s: FastState, now = new Date()): void {
   const ring = root.querySelector<HTMLElement>('.ring');
   if (!ring) return;
   const q = <T extends Element = HTMLElement>(sel: string) => root.querySelector<T>(sel)!;
@@ -65,30 +65,35 @@ export function updateRing(root: HTMLElement, s: FastingStatus, now = new Date()
   const totalHours = (s.end.getTime() - s.start.getTime()) / HOUR;
 
   ring.dataset.phase = s.phase;
+  ring.dataset.over = String(s.over);
   q<SVGCircleElement>('.ring-fill').setAttribute('stroke-dashoffset', String(C * (1 - s.progress)));
 
   if (fasting) {
     q('.ring-phase').textContent = 'Fasting for';
     q('.ring-time').textContent = elapsedText(elapsedMs);
     q('.ring-secs').textContent = `${String(Math.floor(elapsedMs / 1000) % 60).padStart(2, '0')}s`;
-    q('.ring-sub').textContent = 'Remaining';
-    q('.ring-remaining').textContent = formatDuration(s.remainingMs);
+    q('.ring-sub').textContent = s.over ? 'Past your goal' : 'Remaining';
+    q('.ring-remaining').textContent = s.over
+      ? `+${elapsedText(now.getTime() - s.target.getTime())}`
+      : formatDuration(s.remainingMs);
   } else {
     q('.ring-phase').textContent = 'Eating window';
     q('.ring-time').textContent = formatDuration(s.remainingMs);
     q('.ring-secs').textContent = 'left';
-    q('.ring-sub').textContent = 'Next fast starts';
+    q('.ring-sub').textContent = 'Closes at';
     q('.ring-remaining').textContent = formatTime(s.end);
   }
   q('.ring-text').setAttribute(
     'aria-label',
     fasting
-      ? `Fasting for ${elapsedText(elapsedMs)}. ${formatDuration(s.remainingMs)} remaining, ends at ${formatTime(s.end)}.`
+      ? s.over
+        ? `Fasting for ${elapsedText(elapsedMs)}. Goal reached at ${formatTime(s.target)}.`
+        : `Fasting for ${elapsedText(elapsedMs)}. ${formatDuration(s.remainingMs)} to your goal at ${formatTime(s.target)}.`
       : `Eating window open. Closes in ${formatDuration(s.remainingMs)}, at ${formatTime(s.end)}.`,
   );
 
   q('[data-start-label]').textContent = fasting ? 'Fast started' : 'Window opened';
-  q('[data-end-label]').textContent = fasting ? 'Fast ends' : 'Window closes';
+  q('[data-end-label]').textContent = fasting ? (s.over ? 'Goal reached' : 'Goal') : 'Next fast starts';
   q('[data-start]').textContent = `${dayWord(s.start, now)} ${formatTime(s.start)}`;
   q('[data-end]').textContent = `${dayWord(s.end, now)} ${formatTime(s.end)}`;
 
@@ -109,7 +114,8 @@ export function updateRing(root: HTMLElement, s: FastingStatus, now = new Date()
       .join('');
   }
   const elapsedH = elapsedMs / HOUR;
-  const { current, next } = stageAt(elapsedH, fasting ? totalHours : 24);
+  // Stages keep going past the goal while you're still fasting.
+  const { current, next } = stageAt(elapsedH, Infinity);
   markers.querySelectorAll<HTMLElement>('.marker').forEach((m) => {
     const st = stages.find((x) => x.id === m.dataset.stage)!;
     const reached = st.hour <= elapsedH;
@@ -131,7 +137,7 @@ export function updateRing(root: HTMLElement, s: FastingStatus, now = new Date()
 }
 
 /** Sheet body for one stage, relative to the current fast. */
-export function stageSheetHtml(st: FastStage, s: FastingStatus, now = new Date()): string {
+export function stageSheetHtml(st: FastStage, s: FastState, now = new Date()): string {
   const at = new Date(s.start.getTime() + st.hour * HOUR);
   const reached = at <= now;
   const when = reached

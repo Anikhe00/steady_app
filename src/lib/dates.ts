@@ -80,52 +80,6 @@ export interface FastingStatus {
   windowDay: DateKey;
 }
 
-/**
- * Where "now" sits relative to the eating windows. Each day has one window
- * that opens at `startFor(day)` and lasts `eatingHours`; a window may run past
- * midnight (e.g. 18:00 + 8h closes at 02:00), so yesterday's window is checked
- * too.
- */
-export function fastingStatus(
-  now: Date,
-  eatingHours: number,
-  startFor: (day: DateKey) => ClockTime,
-): FastingStatus {
-  const today = dateKey(now);
-  const windowOf = (day: DateKey) => {
-    const open = at(day, startFor(day));
-    return { day, open, close: new Date(open.getTime() + eatingHours * 3_600_000) };
-  };
-  const yesterday = windowOf(addDays(today, -1));
-  const current = windowOf(today);
-  const tomorrow = windowOf(addDays(today, 1));
-
-  const build = (phase: FastingPhase, start: Date, end: Date, windowDay: DateKey): FastingStatus => {
-    const total = Math.max(1, end.getTime() - start.getTime());
-    const elapsed = now.getTime() - start.getTime();
-    return {
-      phase,
-      start,
-      end,
-      remainingMs: Math.max(0, end.getTime() - now.getTime()),
-      progress: Math.min(1, Math.max(0, elapsed / total)),
-      windowDay,
-    };
-  };
-
-  if (now >= yesterday.open && now < yesterday.close) {
-    return build('eating', yesterday.open, yesterday.close, yesterday.day);
-  }
-  if (now < current.open) {
-    const from = yesterday.close < current.open ? yesterday.close : at(today, '00:00');
-    return build('fasting', from, current.open, today);
-  }
-  if (now < current.close) {
-    return build('eating', current.open, current.close, today);
-  }
-  return build('fasting', current.close, tomorrow.open, tomorrow.day);
-}
-
 export function formatDuration(ms: number): string {
   const totalMin = Math.ceil(ms / 60_000);
   const h = Math.floor(totalMin / 60);

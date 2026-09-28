@@ -502,6 +502,7 @@ input[aria-invalid='true'] {
   stroke-linecap: round;
   transition: stroke-dashoffset 0.6s ease, stroke 0.3s ease;
 }
+.ring[data-over='true'] .ring-fill,
 .ring[data-phase='eating'] .ring-fill {
   stroke: var(--ring-eating);
 }
@@ -613,6 +614,10 @@ input[aria-invalid='true'] {
   margin: 0;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
+}
+
+.fast-actions {
+  width: 100%;
 }
 
 .stage-now {

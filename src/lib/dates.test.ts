@@ -5,14 +5,12 @@ import {
   fastStartFromWindow,
   scheduleFromFastStart,
   dateKey,
-  fastingStatus,
   neverMissTwiceStreak,
   rollingAverage,
   weekOf,
 } from './dates';
 
 const local = (y: number, mo: number, d: number, h = 0, mi = 0) => new Date(y, mo - 1, d, h, mi);
-const fixed = (t: string) => () => t;
 
 describe('dateKey / addDays', () => {
   it('uses local calendar dates', () => {
@@ -23,60 +21,6 @@ describe('dateKey / addDays', () => {
   it('crosses month and year boundaries', () => {
     expect(addDays('2026-09-30', 1)).toBe('2026-10-01');
     expect(addDays('2027-01-01', -1)).toBe('2026-12-31');
-  });
-});
-
-describe('fastingStatus', () => {
-  // 16:8 with window 12:00–20:00
-  it('is eating inside the window', () => {
-    const s = fastingStatus(local(2026, 9, 28, 13), 8, fixed('12:00'));
-    expect(s.phase).toBe('eating');
-    expect(s.end).toEqual(local(2026, 9, 28, 20));
-    expect(s.remainingMs).toBe(7 * 3_600_000);
-  });
-
-  it('counts down to tomorrow after the window closes', () => {
-    const s = fastingStatus(local(2026, 9, 28, 22), 8, fixed('12:00'));
-    expect(s.phase).toBe('fasting');
-    expect(s.start).toEqual(local(2026, 9, 28, 20));
-    expect(s.end).toEqual(local(2026, 9, 29, 12));
-    expect(s.windowDay).toBe('2026-09-29');
-    expect(s.progress).toBeCloseTo(2 / 16);
-  });
-
-  it('keeps fasting across midnight until the next window opens', () => {
-    const s = fastingStatus(local(2026, 9, 29, 1), 8, fixed('12:00'));
-    expect(s.phase).toBe('fasting');
-    expect(s.start).toEqual(local(2026, 9, 28, 20));
-    expect(s.end).toEqual(local(2026, 9, 29, 12));
-    expect(s.progress).toBeCloseTo(5 / 16);
-  });
-
-  it("stays in yesterday's window when it runs past midnight", () => {
-    // window 18:00–02:00
-    const s = fastingStatus(local(2026, 9, 29, 1), 8, fixed('18:00'));
-    expect(s.phase).toBe('eating');
-    expect(s.windowDay).toBe('2026-09-28');
-    expect(s.end).toEqual(local(2026, 9, 29, 2));
-  });
-
-  it('starts fasting after a past-midnight window closes', () => {
-    const s = fastingStatus(local(2026, 9, 29, 3), 8, fixed('18:00'));
-    expect(s.phase).toBe('fasting');
-    expect(s.start).toEqual(local(2026, 9, 29, 2));
-    expect(s.end).toEqual(local(2026, 9, 29, 18));
-  });
-
-  it('honours a shifted window for one day only', () => {
-    const startFor = (d: string) => (d === '2026-09-28' ? '15:00' : '12:00');
-    const late = fastingStatus(local(2026, 9, 28, 21), 8, startFor);
-    expect(late.phase).toBe('eating');
-    expect(late.end).toEqual(local(2026, 9, 28, 23));
-
-    const next = fastingStatus(local(2026, 9, 29, 11), 8, startFor);
-    expect(next.phase).toBe('fasting');
-    expect(next.start).toEqual(local(2026, 9, 28, 23));
-    expect(next.end).toEqual(local(2026, 9, 29, 12));
   });
 });
 
@@ -162,25 +106,6 @@ describe('weekOf', () => {
     const w = weekOf('2026-10-01'); // Thursday
     expect(w[0]).toBe('2026-09-28');
     expect(w[6]).toBe('2026-10-04');
-  });
-});
-
-describe('fastingStatus with aggressive plans', () => {
-  it('20:4 opens at 14:00 and closes at 18:00', () => {
-    const eating = fastingStatus(local(2026, 9, 28, 17), 4, fixed('14:00'));
-    expect(eating.phase).toBe('eating');
-    expect(eating.end).toEqual(local(2026, 9, 28, 18));
-
-    const fasting = fastingStatus(local(2026, 9, 28, 19), 4, fixed('14:00'));
-    expect(fasting.phase).toBe('fasting');
-    expect(fasting.end).toEqual(local(2026, 9, 29, 14));
-    expect(fasting.progress).toBeCloseTo(1 / 20);
-  });
-
-  it('18:6 window running past midnight', () => {
-    const s = fastingStatus(local(2026, 9, 29, 0, 30), 6, fixed('20:00'));
-    expect(s.phase).toBe('eating');
-    expect(s.end).toEqual(local(2026, 9, 29, 2));
   });
 });
 

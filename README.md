@@ -36,7 +36,11 @@ src/styles/          tokens (light/dark) and app styles
 - A day counts if you kept your fasting window or did at least one habit.
   A slip never turns a day into a miss, and today is never a miss until it ends.
 - Streak: one missed day is forgiven, two in a row ends it.
-- In Setup you set when your fast starts. The fast end, eating window and next
+- A fast never ends on its own: it keeps counting past the goal until you tap
+  End fast. The eating window runs from that moment for the plan's eating
+  hours, and the next fast starts when it closes (or when you start it).
+  Fasts are stored in `fasts` (src/lib/fasting.ts has the logic).
+- In Setup you set when your fast usually starts. The fast end, eating window and next
   fast start are worked out from the plan (14:10, 16:8, 18:6 or 20:4).
 - While fasting, the Today ring shows time fasted, time remaining, start and
   end, and tappable markers for body stages (src/lib/stages.ts). Stage

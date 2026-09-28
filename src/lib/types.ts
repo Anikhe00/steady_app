@@ -67,12 +67,22 @@ export interface WeighIn {
   kg: number;
 }
 
+/** One fast, as epoch ms. No `end` means it's still running. */
+export interface FastRecord {
+  id: string;
+  start: number;
+  end?: number;
+  /** When the next fast starts, if you moved it from end + eating hours. */
+  nextStart?: number;
+}
+
 export interface AppData {
   settings: Settings | null;
   days: Record<DateKey, DayLog>;
   meals: Meal[];
   slips: Slip[];
   weighIns: WeighIn[];
+  fasts: FastRecord[];
 }
 
 export interface Backup extends AppData {

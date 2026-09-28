@@ -1,16 +1,17 @@
 import * as db from '../lib/db';
-import { addClock, addDays, dateKey, fastingStatus, formatDuration } from '../lib/dates';
+import { addDays, dateKey, fastStartFromWindow, formatDuration } from '../lib/dates';
+import { fastState } from '../lib/fasting';
 import { dayCounted, streak, toDisplay } from '../lib/stats';
 import { EATING_HOURS, type Settings } from '../lib/types';
-import { esc, formatClock, formatDay, onAction } from '../ui/dom';
-import { openMealSheet, openShiftSheet, openSlipSheet, parseWeight } from '../ui/forms';
+import { esc, formatDay, formatTime, onAction } from '../ui/dom';
+import { openEditStartSheet, openEndFastSheet, openMoveNextFastSheet, startFastNow } from '../ui/fast-sheets';
+import { openMealSheet, openSlipSheet, parseWeight } from '../ui/forms';
 import { STAGES } from '../lib/stages';
 import { ringHtml, stageSheetHtml, updateRing } from '../ui/ring';
 import { openSheet, toast } from '../ui/sheet';
 
-export function startFor(s: Settings) {
-  return (day: string) => db.data.days[day]?.shiftedStart ?? s.windowStart;
-}
+const stateNow = (s: Settings, now = new Date()) =>
+  fastState(now, db.data.fasts, EATING_HOURS[s.plan], fastStartFromWindow(s.windowStart, EATING_HOURS[s.plan]));
 
 export function renderToday(root: HTMLElement): () => void {
   const s = db.data.settings!;
@@ -21,8 +22,7 @@ export function renderToday(root: HTMLElement): () => void {
   const slippedToday = db.data.slips.some((x) => x.date === today);
   const missedYesterday = st.missedYesterday && yesterday >= s.startDate;
   const lastWeigh = [...db.data.weighIns].sort((a, b) => a.date.localeCompare(b.date)).at(-1);
-  const todayOpen = log.shiftedStart ?? s.windowStart;
-  const shifted = log.shiftedStart && log.shiftedStart !== s.windowStart;
+  const initial = stateNow(s);
 
   root.innerHTML = `
     <header class="screen-head">
@@ -59,11 +59,16 @@ export function renderToday(root: HTMLElement): () => void {
 
     <section class="card ring-card" aria-label="Fasting window">
       ${ringHtml()}
-      <p class="window-line">
-        ${shifted ? '<span class="tag">Shifted today</span>' : ''}
-        Eat ${esc(formatClock(todayOpen))} to ${esc(formatClock(addClock(todayOpen, EATING_HOURS[s.plan])))}, then fast (${esc(s.plan)})
-      </p>
-      <button class="btn ghost small" data-action="shift">Shift today's window</button>
+      <p class="window-line" data-window-line></p>
+      ${
+        initial.phase === 'fasting'
+          ? `<button class="btn primary block" data-action="end-fast">End fast</button>
+             <button class="btn ghost small" data-action="edit-start">Edit start time</button>`
+          : `<div class="row gap fast-actions">
+               <button class="btn ghost small grow" data-action="move-next">Move next fast</button>
+               <button class="btn ghost small grow" data-action="start-now">Start fast now</button>
+             </div>`
+      }
     </section>
 
     <section class="card" aria-labelledby="h-checklist">
@@ -113,14 +118,16 @@ export function renderToday(root: HTMLElement): () => void {
   `;
 
   onAction(root, {
-    shift: () => openShiftSheet(today, s.windowStart, log.shiftedStart ?? s.windowStart),
+    'end-fast': () => openEndFastSheet(stateNow(s), EATING_HOURS[s.plan]),
+    'edit-start': () => openEditStartSheet(stateNow(s)),
+    'move-next': () => openMoveNextFastSheet(stateNow(s)),
+    'start-now': () => startFastNow(),
     meal: () => openMealSheet(today),
     slip: () => openSlipSheet(),
     stage: (el) => {
       const st = STAGES.find((x) => x.id === el.dataset.stage);
       if (!st) return;
-      const status = fastingStatus(new Date(), EATING_HOURS[s.plan], startFor(s));
-      openSheet(`<span aria-hidden="true">${st.icon}</span> ${esc(st.title)}`, stageSheetHtml(st, status));
+      openSheet(`<span aria-hidden="true">${st.icon}</span> ${esc(st.title)}`, stageSheetHtml(st, stateNow(s)));
     },
   });
 
@@ -153,17 +160,29 @@ export function renderToday(root: HTMLElement): () => void {
   // Live countdown. Only the ring and the closing banner update; the rest of
   // the screen re-renders on data changes.
   const closing = root.querySelector<HTMLElement>('[data-closing]')!;
+  const line = root.querySelector<HTMLElement>('[data-window-line]')!;
   const tick = () => {
     const now = new Date();
     if (dateKey(now) !== today) {
       window.dispatchEvent(new Event('steady:rerender'));
       return;
     }
-    const status = fastingStatus(now, EATING_HOURS[s.plan], startFor(s));
-    updateRing(root, status);
-    const soon = status.phase === 'eating' && status.remainingMs <= 3_600_000;
+    const state = stateNow(s, now);
+    // Phase flipped (the eating window closed): swap the buttons.
+    if (state.phase !== initial.phase) {
+      window.dispatchEvent(new Event('steady:rerender'));
+      return;
+    }
+    updateRing(root, state, now);
+    line.textContent =
+      state.phase === 'fasting'
+        ? state.over
+          ? `Goal of ${s.plan.split(':')[0]}h reached. End your fast whenever you're ready.`
+          : `Goal: ${s.plan} fast. Your eating window starts when you end it.`
+        : `Eat until ${formatTime(state.end)}. Your next fast starts then.`;
+    const soon = state.phase === 'eating' && state.remainingMs <= 3_600_000;
     closing.hidden = !soon;
-    if (soon) closing.textContent = `Your eating window closes in ${formatDuration(status.remainingMs)}.`;
+    if (soon) closing.textContent = `Your eating window closes in ${formatDuration(state.remainingMs)}.`;
   };
   tick();
   const timer = window.setInterval(tick, 1000);

@@ -19,17 +19,19 @@ export function readBackup(parsed: unknown): ReadResult {
     return { ok: false, error: 'This backup is from a newer version of Steady.' };
   }
   const { settings, days, meals, slips, weighIns } = parsed;
+  const fasts = parsed.fasts ?? [];
   const photos = parsed.photos ?? {};
   if (settings !== null && !(isObj(settings) && isTime(settings.windowStart) && Array.isArray(settings.habits))) {
     return { ok: false, error: 'The settings in this backup look damaged.' };
   }
-  if (!isObj(days) || !Array.isArray(meals) || !Array.isArray(slips) || !Array.isArray(weighIns) || !isObj(photos)) {
+  if (!isObj(days) || !Array.isArray(meals) || !Array.isArray(slips) || !Array.isArray(weighIns) || !isObj(photos) || !Array.isArray(fasts)) {
     return { ok: false, error: 'This backup is missing some of its data.' };
   }
   const bad =
     meals.some((m) => !isObj(m) || !isDate(m.date) || typeof m.id !== 'string') ||
     slips.some((s) => !isObj(s) || !isDate(s.date) || typeof s.id !== 'string') ||
     weighIns.some((w) => !isObj(w) || !isDate(w.date) || typeof w.kg !== 'number') ||
+    fasts.some((f) => !isObj(f) || typeof f.id !== 'string' || typeof f.start !== 'number') ||
     Object.values(photos).some((p) => typeof p !== 'string' || !p.startsWith('data:image/'));
   if (bad) return { ok: false, error: 'Some entries in this backup look damaged.' };
 
@@ -41,7 +43,7 @@ export function readBackup(parsed: unknown): ReadResult {
   });
   return {
     ok: true,
-    data: { settings, days, meals: cleanMeals, slips, weighIns } as AppData,
+    data: { settings, days, meals: cleanMeals, slips, weighIns, fasts } as AppData,
     photos: photos as Record<string, string>,
   };
 }

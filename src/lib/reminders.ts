@@ -1,5 +1,6 @@
 import * as db from './db';
-import { fastingStatus } from './dates';
+import { fastStartFromWindow } from './dates';
+import { fastState } from './fasting';
 import { EATING_HOURS, type Settings } from './types';
 
 // Browsers can only schedule a notification while the page is alive (open or
@@ -39,20 +40,16 @@ export function scheduleReminder(settings: Settings | null): void {
   clearTimeout(timer);
   if (!settings?.remindersOn || !notificationsSupported() || Notification.permission !== 'granted') return;
 
-  const startFor = (day: string) => db.data.days[day]?.shiftedStart ?? settings.windowStart;
+  // Only the eating window has a known end: a fast runs until you end it.
   const eatingHours = EATING_HOURS[settings.plan];
   const now = new Date();
-  const s = fastingStatus(now, eatingHours, startFor);
+  const s = fastState(now, db.data.fasts, eatingHours, fastStartFromWindow(settings.windowStart, eatingHours));
+  if (s.phase !== 'eating') return;
 
-  let fireAt: number;
-  if (s.phase === 'eating') {
-    fireAt = s.end.getTime() - LEAD_MS;
-    if (fireAt <= now.getTime()) {
-      notify(s.windowDay, Math.max(1, Math.round(s.remainingMs / 60_000))).catch(() => {});
-      return;
-    }
-  } else {
-    fireAt = s.end.getTime() + eatingHours * 3_600_000 - LEAD_MS;
+  const fireAt = s.end.getTime() - LEAD_MS;
+  if (fireAt <= now.getTime()) {
+    notify(String(s.start.getTime()), Math.max(1, Math.round(s.remainingMs / 60_000))).catch(() => {});
+    return;
   }
   timer = window.setTimeout(() => scheduleReminder(db.data.settings), Math.min(fireAt - now.getTime(), 2 ** 31 - 1));
 }

@@ -16,6 +16,7 @@ const sample: AppData = {
   meals: [],
   slips: [{ id: 's1', date: '2026-09-28', time: '21:00', trigger: 'stress' }],
   weighIns: [{ id: 'w1', date: '2026-09-28', kg: 80.2 }],
+  fasts: [{ id: 'f1', start: 1_790_000_000_000, end: 1_790_057_600_000 }],
 };
 
 describe('backup', () => {
@@ -52,6 +53,12 @@ describe('backup', () => {
   it('rejects photos that are not images', () => {
     const file = { ...makeBackup(sample), photos: { m1: 'javascript:alert(1)' } };
     expect(readBackup(file).ok).toBe(false);
+  });
+
+  it('restores older files without fasts as an empty list', () => {
+    const { fasts: _, ...old } = makeBackup(sample);
+    const r = readBackup(JSON.parse(JSON.stringify(old)));
+    expect(r.ok && r.data.fasts).toEqual([]);
   });
 
   it('rejects files that are not Steady backups', () => {

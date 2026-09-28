@@ -2,7 +2,7 @@ import * as db from '../lib/db';
 import { clockTime, dateKey } from '../lib/dates';
 import { fromDisplay } from '../lib/stats';
 import { TRIGGER_LABELS, type MealType, type Portion, type SlipTrigger } from '../lib/types';
-import { esc, formatClock } from './dom';
+import { esc } from './dom';
 import { compressPhoto } from './photo';
 import { openSheet, toast } from './sheet';
 
@@ -189,36 +189,6 @@ export function openSlipSheet(onSaved?: () => void): void {
         <button class="btn primary block" type="button" data-close>Back to today</button>
       </div>`;
     onSaved?.();
-  });
-}
-
-export function openShiftSheet(date: string, usual: string, current: string): void {
-  const s = openSheet(
-    "Shift today's window",
-    `<form class="stack">
-      <p class="muted">Late dinner or a family event? Move today's eating window. This is planning ahead, not failing.</p>
-      <label class="field"><span>Window opens at</span>
-        <input type="time" name="start" value="${current}" required>
-      </label>
-      <p class="muted small">Your usual start is ${esc(formatClock(usual))}. Tomorrow goes back to it.</p>
-      <div class="row gap">
-        ${current !== usual ? '<button class="btn ghost grow" type="button" data-reset>Use usual time</button>' : ''}
-        <button class="btn primary grow" type="submit">Shift window</button>
-      </div>
-    </form>`,
-  );
-  const form = s.body.querySelector('form')!;
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const start = String(new FormData(form).get('start'));
-    await db.updateDay(date, { shiftedStart: start === usual ? undefined : start });
-    s.close();
-    toast(`Today's window opens at ${formatClock(start)}`);
-  });
-  s.body.querySelector('[data-reset]')?.addEventListener('click', async () => {
-    await db.updateDay(date, { shiftedStart: undefined });
-    s.close();
-    toast('Back to your usual window');
   });
 }
 

@@ -1,5 +1,5 @@
 import { createStore, del, delMany, get, getMany, keys, set, setMany } from 'idb-keyval';
-import type { AppData, DateKey, DayLog, Meal, Settings, Slip, WeighIn } from './types';
+import type { AppData, DateKey, DayLog, FastRecord, Meal, Settings, Slip, WeighIn } from './types';
 
 // One IndexedDB object store, one key per collection. The whole data set is
 // small (a year is well under a megabyte), so it is loaded into memory on boot
@@ -8,7 +8,7 @@ import type { AppData, DateKey, DayLog, Meal, Settings, Slip, WeighIn } from './
 // when shown.
 
 const store = createStore('steady', 'data');
-const KEYS = ['settings', 'days', 'meals', 'slips', 'weighIns'] as const;
+const KEYS = ['settings', 'days', 'meals', 'slips', 'weighIns', 'fasts'] as const;
 type Key = (typeof KEYS)[number];
 
 export const data: AppData = {
@@ -17,6 +17,7 @@ export const data: AppData = {
   meals: [],
   slips: [],
   weighIns: [],
+  fasts: [],
 };
 
 type Listener = () => void;
@@ -32,12 +33,13 @@ async function save(...keys: Key[]): Promise<void> {
 }
 
 export async function load(): Promise<void> {
-  const [settings, days, meals, slips, weighIns] = await getMany(KEYS as unknown as string[], store);
+  const [settings, days, meals, slips, weighIns, fasts] = await getMany(KEYS as unknown as string[], store);
   data.settings = settings ?? null;
   data.days = days ?? {};
   data.meals = meals ?? [];
   data.slips = slips ?? [];
   data.weighIns = weighIns ?? [];
+  data.fasts = fasts ?? [];
   // Ask the browser not to evict our data under storage pressure.
   navigator.storage?.persist?.().catch(() => {});
 }
@@ -105,6 +107,17 @@ export async function addWeighIn(w: Omit<WeighIn, 'id'>): Promise<void> {
 export async function deleteWeighIn(id: string): Promise<void> {
   data.weighIns = data.weighIns.filter((w) => w.id !== id);
   await save('weighIns');
+}
+
+/** Save a fast: updates it if the id exists, otherwise adds it. */
+export async function putFast(f: Omit<FastRecord, 'id'> & { id?: string | null }): Promise<string> {
+  const id = f.id ?? uid();
+  const rec: FastRecord = { ...f, id };
+  const i = data.fasts.findIndex((x) => x.id === id);
+  if (i >= 0) data.fasts[i] = rec;
+  else data.fasts.push(rec);
+  await save('fasts');
+  return id;
 }
 
 /** Replace everything (used by restore). */

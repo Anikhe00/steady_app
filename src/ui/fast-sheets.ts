@@ -1,6 +1,6 @@
 import * as db from '../lib/db';
 import { dateKey, formatDuration } from '../lib/dates';
-import { latestFast, pastTime, toClock, upcomingTime, type FastState } from '../lib/fasting';
+import { latestFast, nearestTime, pastTime, toClock, upcomingTime, type FastState } from '../lib/fasting';
 import { formatTime } from './dom';
 import { openSheet, toast } from './sheet';
 
@@ -57,40 +57,60 @@ export function openEndFastSheet(state: FastState, eatingHours: number): void {
   });
 }
 
+/** "at 11:25", or "yesterday at 11:25" / "tomorrow at 11:25" when not today. */
+function dayTime(d: Date, now = new Date()): string {
+  const diff = Math.round((new Date(d).setHours(0, 0, 0, 0) - new Date(now).setHours(0, 0, 0, 0)) / 86_400_000);
+  const day = diff === 0 ? '' : diff === -1 ? 'yesterday ' : diff === 1 ? 'tomorrow ' : `${d.toLocaleDateString(undefined, { weekday: 'short' })} `;
+  return `${day}at ${formatTime(d)}`;
+}
+
 export function openEditStartSheet(state: FastState): void {
   const prev = latestFast(db.data.fasts.filter((f) => f.id !== state.fastId && f.end !== undefined));
   const s = openSheet(
     'Edit fast start',
     `<form class="stack">
-      <p class="muted">When did you finish your last bite?</p>
-      <label class="field"><span>Fast started at</span>
+      <p class="muted">When did you finish your last bite? You can also pick a time later today if you haven't started yet.</p>
+      <label class="field"><span>Fast starts at</span>
         <input type="time" name="start" value="${toClock(state.start)}" required>
       </label>
+      <p class="muted small" data-when></p>
       <p class="form-error" role="alert" hidden></p>
       <button class="btn primary block" type="submit">Save</button>
     </form>`,
   );
   const form = s.body.querySelector('form')!;
+  const input = form.elements.namedItem('start') as HTMLInputElement;
+  const startAt = () => nearestTime(new Date(), input.value || toClock(state.start));
+  const when = form.querySelector<HTMLElement>('[data-when]')!;
+  const refresh = () => {
+    const d = startAt();
+    when.textContent = d > new Date() ? `Your fast will start ${dayTime(d)}. Until then you're in your eating window.` : `Fast started ${dayTime(d)}.`;
+  };
+  input.addEventListener('input', refresh);
+  refresh();
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const start = pastTime(new Date(), String(new FormData(form).get('start'))).getTime();
+    const start = startAt().getTime();
     if (prev?.end && start < prev.end) {
-      return sheetError(s.body, `Your last fast ended at ${formatTime(new Date(prev.end))}. Pick a time after that.`);
+      return sheetError(s.body, `Your last fast ended ${dayTime(new Date(prev.end))}. Pick a time after that.`);
     }
     await db.putFast({ id: state.fastId, start });
     s.close();
-    toast(`Fast start set to ${formatTime(new Date(start))}`);
+    toast(`Fast starts ${dayTime(new Date(start))}`);
   });
 }
 
 export async function startFastNow(): Promise<void> {
-  await db.putFast({ start: Date.now() });
+  // A fast already set for later just starts now instead.
+  const scheduled = db.data.fasts.find((f) => f.end === undefined && f.start > Date.now());
+  await db.putFast(scheduled ? { ...scheduled, start: Date.now() } : { start: Date.now() });
   toast('Fast started');
 }
 
 export function openMoveNextFastSheet(state: FastState): void {
   const last = db.data.fasts.find((f) => f.id === state.fastId);
-  if (!last?.end) return;
+  if (!last) return;
   const s = openSheet(
     'Move your next fast',
     `<form class="stack">
@@ -105,8 +125,9 @@ export function openMoveNextFastSheet(state: FastState): void {
   const form = s.body.querySelector('form')!;
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const next = upcomingTime(new Date(last.end!), String(new FormData(form).get('next'))).getTime();
-    await db.putFast({ ...last, nextStart: next });
+    const next = upcomingTime(new Date(last.end ?? Date.now()), String(new FormData(form).get('next'))).getTime();
+    // A fast already set to start later just moves; otherwise the ended fast remembers the new start.
+    await db.putFast(last.end === undefined ? { ...last, start: next } : { ...last, nextStart: next });
     s.close();
     toast(`Next fast starts at ${formatTime(new Date(next))}`);
   });

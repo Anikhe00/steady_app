@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fastState, lastOccurrence, pastTime, upcomingTime } from './fasting';
+import { fastState, lastOccurrence, nearestTime, pastTime, upcomingTime } from './fasting';
 import type { FastRecord } from './types';
 
 const local = (d: number, h: number, m = 0) => new Date(2026, 8, d, h, m);
@@ -67,7 +67,35 @@ describe('fastState', () => {
   });
 });
 
+describe('a fast set to start later', () => {
+  const fasts: FastRecord[] = [
+    { id: 'a', start: ms(local(27, 17)), end: ms(local(28, 11, 25)) },
+    { id: 'b', start: ms(local(28, 17, 24)) },
+  ];
+
+  it('keeps you in your eating window until it starts', () => {
+    const s = fastState(local(28, 16, 32), fasts, 6, '17:00');
+    expect(s.phase).toBe('eating');
+    expect(s.start).toEqual(local(28, 11, 25));
+    expect(s.end).toEqual(local(28, 17, 24));
+    expect(s.fastId).toBe('b');
+  });
+
+  it('starts fasting at that time', () => {
+    const s = fastState(local(28, 17, 30), fasts, 6, '17:00');
+    expect(s).toMatchObject({ phase: 'fasting', fastId: 'b' });
+    expect(s.start).toEqual(local(28, 17, 24));
+  });
+});
+
 describe('time helpers', () => {
+  it('reads a clock time as the closest occurrence to now', () => {
+    expect(nearestTime(local(28, 16, 32), '17:24')).toEqual(local(28, 17, 24));
+    expect(nearestTime(local(28, 16, 32), '14:24')).toEqual(local(28, 14, 24));
+    expect(nearestTime(local(29, 1), '23:00')).toEqual(local(28, 23));
+    expect(nearestTime(local(28, 23), '01:00')).toEqual(local(29, 1));
+  });
+
   it('finds the last time the clock showed a time', () => {
     expect(lastOccurrence(local(29, 21), '20:00')).toEqual(local(29, 20));
     expect(lastOccurrence(local(29, 7), '20:00')).toEqual(local(28, 20));

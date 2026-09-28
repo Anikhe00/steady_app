@@ -58,25 +58,32 @@ export function fastState(
     };
   };
 
-  // Nothing logged yet: assume the fast began at your usual start time.
-  if (!last) return fasting(lastOccurrence(now, usualFastStart).getTime(), null);
-  if (last.end === undefined) return fasting(last.start, last.id);
-
-  const close = nextFastStart(last, eatingHours);
-  if (t < close) {
-    const total = Math.max(1, close - last.end);
+  const eating = (opened: number, close: number, fastId: string): FastState => {
+    const total = Math.max(1, close - opened);
     return {
       phase: 'eating',
-      start: new Date(last.end),
+      start: new Date(opened),
       end: new Date(close),
       target: new Date(close),
       remainingMs: close - t,
-      progress: Math.min(1, Math.max(0, (t - last.end) / total)),
+      progress: Math.min(1, Math.max(0, (t - opened) / total)),
       over: false,
-      windowDay: dateKey(new Date(last.end)),
-      fastId: last.id,
+      windowDay: dateKey(new Date(opened)),
+      fastId,
     };
+  };
+
+  // Nothing logged yet: assume the fast began at your usual start time.
+  if (!last) return fasting(lastOccurrence(now, usualFastStart).getTime(), null);
+  if (last.end === undefined) {
+    if (last.start <= t) return fasting(last.start, last.id);
+    // A fast set to start later: you're still in your eating window until then.
+    const prev = latestFast(fasts.filter((f) => f.id !== last.id && f.end !== undefined));
+    return eating(Math.min(prev?.end ?? t, t), last.start, last.id);
   }
+
+  const close = nextFastStart(last, eatingHours);
+  if (t < close) return eating(last.end, close, last.id);
   // The eating window closed, so the next fast is under way.
   return fasting(close, null);
 }
@@ -84,6 +91,22 @@ export function fastState(
 /** Minutes → "HH:MM", for pre-filling time inputs. */
 export function toClock(d: Date): ClockTime {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+/**
+ * A clock time read as the occurrence closest to `now` (yesterday, today or
+ * tomorrow), so "17:24" at 16:32 means today, and "23:00" at 01:00 means
+ * last night.
+ */
+export function nearestTime(now: Date, t: ClockTime): Date {
+  const { h, m } = parseClock(t);
+  const candidates = [-1, 0, 1].map((dd) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() + dd);
+    d.setHours(h, m, 0, 0);
+    return d;
+  });
+  return candidates.reduce((a, b) => (Math.abs(b.getTime() - now.getTime()) < Math.abs(a.getTime() - now.getTime()) ? b : a));
 }
 
 /**

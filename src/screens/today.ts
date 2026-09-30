@@ -62,8 +62,10 @@ export function renderToday(root: HTMLElement): () => void {
       <p class="window-line" data-window-line></p>
       ${
         initial.phase === 'fasting'
-          ? `<button class="btn primary block" data-action="end-fast">End fast</button>
-             <button class="btn ghost small" data-action="edit-start">Edit start time</button>`
+          ? `<div class="row gap fast-actions">
+               <button class="btn ghost grow" data-action="edit-start">Edit start time</button>
+               <button class="btn primary grow" data-action="end-fast">End fast</button>
+             </div>`
           : `<div class="row gap fast-actions">
                <button class="btn ghost small grow" data-action="move-next">Move next fast</button>
                <button class="btn ghost small grow" data-action="start-now">Start fast now</button>

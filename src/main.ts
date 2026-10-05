@@ -17,10 +17,12 @@ const main = document.getElementById('main')!;
 const nav = document.getElementById('tabbar')!;
 let cleanup: (() => void) | void;
 
-function currentTab(): Tab {
-  const t = location.hash.replace('#/', '') as Tab;
-  return TABS.includes(t) ? t : 'today';
+/** "#/today/2026-10-03" opens Today on a past day; the tab is the first part. */
+function route(): { tab: Tab; arg?: string } {
+  const [t, arg] = location.hash.replace('#/', '').split('/');
+  return TABS.includes(t as Tab) ? { tab: t as Tab, arg } : { tab: 'today' };
 }
+const currentTab = () => route().tab;
 
 function render(): void {
   cleanup?.();
@@ -45,7 +47,7 @@ function render(): void {
 
   switch (tab) {
     case 'today':
-      cleanup = renderToday(view);
+      cleanup = renderToday(view, route().arg);
       break;
     case 'food':
       renderFood(view);

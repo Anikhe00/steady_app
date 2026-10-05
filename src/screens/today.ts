@@ -1,17 +1,18 @@
 import * as db from '../lib/db';
-import { addDays, dateKey, fastStartFromWindow, formatDuration } from '../lib/dates';
-import { fastState } from '../lib/fasting';
+import { addDays, dateKey, formatDuration } from '../lib/dates';
+import { fastStateFor } from '../lib/fasting';
+import { dayPlan, scheduleOf } from '../lib/schedule';
 import { dayCounted, streak, toDisplay } from '../lib/stats';
-import { EATING_HOURS, type Settings } from '../lib/types';
+import type { Settings } from '../lib/types';
 import { esc, formatDay, formatTime, onAction } from '../ui/dom';
-import { openEditStartSheet, openEndFastSheet, openMoveNextFastSheet, startFastNow } from '../ui/fast-sheets';
+import { dayTime, openEditStartSheet, openEndFastSheet, openMoveNextFastSheet, startFastNow } from '../ui/fast-sheets';
 import { openMealSheet, openSlipSheet, parseWeight } from '../ui/forms';
 import { STAGES } from '../lib/stages';
 import { ringHtml, stageSheetHtml, updateRing } from '../ui/ring';
 import { openSheet, toast } from '../ui/sheet';
 
-const stateNow = (s: Settings, now = new Date()) =>
-  fastState(now, db.data.fasts, EATING_HOURS[s.plan], fastStartFromWindow(s.windowStart, EATING_HOURS[s.plan]));
+const stateNow = (s: Settings, now = new Date()) => fastStateFor(s, db.data.fasts, now);
+const HOUR = 3_600_000;
 
 export function renderToday(root: HTMLElement): () => void {
   const s = db.data.settings!;
@@ -23,10 +24,12 @@ export function renderToday(root: HTMLElement): () => void {
   const missedYesterday = st.missedYesterday && yesterday >= s.startDate;
   const lastWeigh = [...db.data.weighIns].sort((a, b) => a.date.localeCompare(b.date)).at(-1);
   const initial = stateNow(s);
+  const sched = scheduleOf(s);
+  const restDay = dayPlan(sched, today).kind === 'rest';
 
   root.innerHTML = `
     <header class="screen-head">
-      <p class="eyebrow">${esc(formatDay(today))}</p>
+      <p class="eyebrow">${esc(formatDay(today))}${restDay ? ' · Rest day' : ''}</p>
       <h1>Today</h1>
       <p class="streak-chip" aria-label="Streak: ${st.streak} days">
         <span aria-hidden="true">●</span> ${st.streak} day${st.streak === 1 ? '' : 's'} steady
@@ -64,7 +67,7 @@ export function renderToday(root: HTMLElement): () => void {
         initial.phase === 'fasting'
           ? `<div class="row gap fast-actions">
                <button class="btn ghost grow" data-action="edit-start">Edit start time</button>
-               <button class="btn primary grow" data-action="end-fast">End fast</button>
+               <button class="btn primary grow" data-action="end-fast">${initial.dry ? 'Break fast' : 'End fast'}</button>
              </div>`
           : `<div class="row gap fast-actions">
                <button class="btn ghost small grow" data-action="move-next">Move next fast</button>
@@ -120,10 +123,10 @@ export function renderToday(root: HTMLElement): () => void {
   `;
 
   onAction(root, {
-    'end-fast': () => openEndFastSheet(stateNow(s), EATING_HOURS[s.plan]),
+    'end-fast': () => openEndFastSheet(stateNow(s), sched),
     'edit-start': () => openEditStartSheet(stateNow(s)),
     'move-next': () => openMoveNextFastSheet(stateNow(s)),
-    'start-now': () => startFastNow(),
+    'start-now': () => startFastNow(sched),
     meal: () => openMealSheet(today),
     slip: () => openSlipSheet(),
     stage: (el) => {
@@ -176,12 +179,19 @@ export function renderToday(root: HTMLElement): () => void {
       return;
     }
     updateRing(root, state, now);
+    const goal = formatDuration(state.goalHours * HOUR);
     line.textContent =
       state.phase === 'fasting'
         ? state.over
-          ? `Goal of ${s.plan.split(':')[0]}h reached. End your fast whenever you're ready.`
-          : `Goal: ${s.plan} fast. Your eating window starts when you end it.`
-        : `Eat until ${formatTime(state.end)}. Your next fast starts then.`;
+          ? state.dry
+            ? `Iftar time. Your ${goal} goal is reached, break your fast whenever you're ready.`
+            : `Goal of ${goal} reached. End your fast whenever you're ready.`
+          : state.dry
+          ? `Dry fast: no food or water until ${formatTime(state.target)}.`
+          : `Goal: ${goal} fast, until ${dayTime(state.target, now)}. Your eating window starts when you end it.`
+        : state.dry
+        ? `Eat and drink until ${dayTime(state.end, now)}. Your dry fast starts then.`
+        : `Eat until ${dayTime(state.end, now)}. Your next fast starts then.`;
     const soon = state.phase === 'eating' && state.remainingMs <= 3_600_000;
     closing.hidden = !soon;
     if (soon) closing.textContent = `Your eating window closes in ${formatDuration(state.remainingMs)}.`;

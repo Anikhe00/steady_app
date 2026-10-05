@@ -1,7 +1,8 @@
 import { addDays, neverMissTwiceStreak, rollingAverage, weekOf, type Point } from './dates';
+import { isRestDay } from './schedule';
 import type { AppData, DateKey, SlipTrigger } from './types';
 
-export type DayTone = 'all' | 'some' | 'none' | 'pending' | 'outside';
+export type DayTone = 'all' | 'some' | 'none' | 'rest' | 'pending' | 'outside';
 
 /** A day counts towards the streak if the fast was kept or any habit was done. */
 export function dayCounted(d: AppData, date: DateKey): boolean {
@@ -20,12 +21,13 @@ export function dayTone(d: AppData, date: DateKey, today: DateKey): DayTone {
   const done = (log?.keptFast ? 1 : 0) + habits.filter((id) => log?.habitsDone.includes(id)).length;
   if (done === habits.length + 1) return 'all';
   if (done > 0) return 'some';
-  return date === today ? 'pending' : 'none';
+  if (date === today) return 'pending';
+  return isRestDay(s.week, date) ? 'rest' : 'none';
 }
 
 export function streak(d: AppData, today: DateKey) {
   const start = d.settings?.startDate ?? today;
-  return neverMissTwiceStreak((date) => dayCounted(d, date), today, start);
+  return neverMissTwiceStreak((date) => dayCounted(d, date), today, start, (date) => isRestDay(d.settings?.week, date));
 }
 
 export function weekSummary(d: AppData, today: DateKey) {

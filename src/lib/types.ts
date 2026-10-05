@@ -30,7 +30,18 @@ export interface Settings {
   unit: WeightUnit;
   remindersOn: boolean;
   startDate: DateKey;
+  /** What each weekday's fast is, Monday first. Missing means every day follows the plan. */
+  week?: DayPlan[];
 }
+
+/**
+ * One weekday's fast. A fast belongs to the day it starts, so a custom fast
+ * starting Monday at 20:00 for 18 hours runs into Tuesday.
+ */
+export type DayPlan =
+  | { kind: 'plan' }
+  | { kind: 'rest' }
+  | { kind: 'custom'; start: ClockTime; hours: number; dry: boolean };
 
 export interface DayLog {
   date: DateKey;
@@ -74,6 +85,10 @@ export interface FastRecord {
   end?: number;
   /** When the next fast starts, if you moved it from end + eating hours. */
   nextStart?: number;
+  /** The goal this fast was started with; older records use the plan's hours. */
+  goalHours?: number;
+  /** No food or water (e.g. Suhoor to Iftar). */
+  dry?: boolean;
 }
 
 export interface AppData {

@@ -468,6 +468,19 @@ input[aria-invalid='true'] {
   background: var(--info-bg);
   font-weight: 600;
 }
+.past-banner .btn {
+  align-self: flex-start;
+  margin-top: 8px;
+}
+.banner .fill-in {
+  align-self: flex-start;
+  padding: 6px 0 0;
+  font: inherit;
+  font-weight: 600;
+}
+.past-summary {
+  text-align: center;
+}
 .banner[hidden] {
   display: none;
 }
@@ -948,6 +961,17 @@ input[aria-invalid='true'] {
   gap: 6px;
   padding: 8px 0;
   border-radius: 12px;
+}
+a.tile {
+  color: inherit;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+a.tile:hover {
+  background: var(--surface-2);
+}
+a.tile:focus-visible {
+  outline: 3px solid var(--focus);
 }
 .tile[aria-current='date'] {
   background: var(--surface-2);

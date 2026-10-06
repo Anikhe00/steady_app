@@ -20,6 +20,21 @@ export function addDays(key: DateKey, n: number): DateKey {
   return dateKey(d);
 }
 
+/** True for a real calendar date written as "YYYY-MM-DD" (so not "2026-02-30"). */
+export function isDateKey(s: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) && dateKey(parseKey(s)) === s;
+}
+
+/**
+ * The day a "#/today/<date>" link opens for logging. Past days can be filled
+ * in back to the day tracking started; the future can't be logged, and
+ * anything unreadable falls back to today.
+ */
+export function logDay(requested: string | undefined, today: DateKey, startDate: DateKey): DateKey {
+  if (!requested || !isDateKey(requested) || requested >= today) return today;
+  return requested < startDate && startDate <= today ? startDate : requested;
+}
+
 export function clockTime(d: Date): ClockTime {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }

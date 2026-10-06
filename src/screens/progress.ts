@@ -41,12 +41,16 @@ export function renderProgress(root: HTMLElement): void {
             const tone = dayTone(db.data, d, today);
             const slipped = db.data.slips.some((x) => x.date === d);
             const name = formatDay(d, { weekday: 'short' });
-            return `<li class="tile" data-tone="${tone}" ${d === today ? 'aria-current="date"' : ''}>
+            const inner = `
               <span class="sr-only">${esc(formatDay(d))}: ${TONE_LABEL[tone]}${slipped ? ', slip logged' : ''}</span>
               <span class="tile-day" aria-hidden="true">${esc(name.slice(0, 2))}</span>
               <span class="tile-dot" aria-hidden="true"></span>
-              ${slipped ? '<span class="tile-slip" aria-hidden="true"></span>' : ''}
-            </li>`;
+              ${slipped ? '<span class="tile-slip" aria-hidden="true"></span>' : ''}`;
+            const current = d === today ? 'aria-current="date"' : '';
+            // Tracked days open on Today so a missed one can be filled in.
+            return tone === 'outside'
+              ? `<li><span class="tile" data-tone="${tone}" ${current}>${inner}</span></li>`
+              : `<li><a class="tile" data-tone="${tone}" ${current} href="${d === today ? '#/today' : `#/today/${d}`}">${inner}</a></li>`;
           })
           .join('')}
       </ol>
@@ -56,6 +60,7 @@ export function renderProgress(root: HTMLElement): void {
           s.week?.some((p) => p.kind === 'rest') ? '<span><i class="sw rest"></i>Rest</span>' : ''
         }<span><i class="sw slip"></i>Slip</span>
       </p>
+      <p class="muted small">Tap a day to fill in anything you forgot.</p>
     </section>
 
     <section class="card streak-card" aria-labelledby="h-streak">

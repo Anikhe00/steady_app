@@ -5,6 +5,8 @@ import {
   fastStartFromWindow,
   scheduleFromFastStart,
   dateKey,
+  isDateKey,
+  logDay,
   neverMissTwiceStreak,
   rollingAverage,
   weekOf,
@@ -143,5 +145,41 @@ describe('neverMissTwiceStreak with rest days', () => {
   it('still counts a rest day you showed up on', () => {
     const r = neverMissTwiceStreak(days(['2026-09-29', '2026-09-30']), '2026-09-30', '2026-09-29', days(['2026-09-29']));
     expect(r.streak).toBe(2);
+  });
+});
+
+describe('isDateKey', () => {
+  it('accepts real dates and rejects anything else', () => {
+    expect(isDateKey('2026-10-03')).toBe(true);
+    expect(isDateKey('2028-02-29')).toBe(true);
+    expect(isDateKey('2026-02-30')).toBe(false);
+    expect(isDateKey('2026-13-01')).toBe(false);
+    expect(isDateKey('2026-1-3')).toBe(false);
+    expect(isDateKey('yesterday')).toBe(false);
+  });
+});
+
+describe('logDay', () => {
+  const today = '2026-10-05';
+  const start = '2026-09-28';
+
+  it('opens a past day that is being tracked', () => {
+    expect(logDay('2026-10-04', today, start)).toBe('2026-10-04');
+    expect(logDay(start, today, start)).toBe(start);
+  });
+
+  it('falls back to today with no day, a bad day, today or the future', () => {
+    expect(logDay(undefined, today, start)).toBe(today);
+    expect(logDay('2026-02-30', today, start)).toBe(today);
+    expect(logDay(today, today, start)).toBe(today);
+    expect(logDay('2026-10-06', today, start)).toBe(today);
+  });
+
+  it('stops at the day tracking started', () => {
+    expect(logDay('2026-09-01', today, start)).toBe(start);
+  });
+
+  it('crosses month boundaries', () => {
+    expect(logDay('2026-09-30', '2026-10-01', '2026-09-01')).toBe('2026-09-30');
   });
 });

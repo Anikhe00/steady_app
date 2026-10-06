@@ -8,6 +8,12 @@ import { confirmSheet, openSheet, toast } from '../ui/sheet';
 let selected: string | null = null;
 let photoUrls: string[] = [];
 
+/** Opens the Food tab on a given day. */
+export function openFoodDay(d: string): void {
+  selected = d;
+  location.hash = '#/food';
+}
+
 const mealTitle = (m: Meal) => m.description || m.type[0].toUpperCase() + m.type.slice(1);
 
 const FULL_LABEL = ['', 'Still hungry', 'Light', 'Satisfied', 'Full', 'Stuffed'];

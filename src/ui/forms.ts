@@ -155,7 +155,9 @@ const SLIP_REPLIES: Record<SlipTrigger, string> = {
   other: 'Whatever it was, writing it down is the step most people skip.',
 };
 
-export function openSlipSheet(onSaved?: () => void): void {
+/** Logs a slip now, or on `date` at a chosen time when filling in a past day. */
+export function openSlipSheet(onSaved?: () => void, date = dateKey(new Date())): void {
+  const past = date !== dateKey(new Date());
   const s = openSheet(
     'I slipped',
     `<form class="stack">
@@ -163,6 +165,7 @@ export function openSlipSheet(onSaved?: () => void): void {
       <fieldset class="field"><legend>What set it off?</legend>
         ${chips('trigger', Object.entries(TRIGGER_LABELS).map(([value, label]) => ({ value, label })), '')}
       </fieldset>
+      ${past ? '<label class="field"><span>About what time?</span><input type="time" name="time" value="12:00" required></label>' : ''}
       <label class="field"><span>Note (optional)</span>
         <textarea name="note" rows="2" maxlength="300" placeholder="Anything you want future-you to know"></textarea>
       </label>
@@ -181,12 +184,13 @@ export function openSlipSheet(onSaved?: () => void): void {
     }
     const now = new Date();
     const note = String(f.get('note') ?? '').trim();
-    await db.addSlip({ date: dateKey(now), time: clockTime(now), trigger, ...(note ? { note } : {}) });
+    const time = past ? String(f.get('time') || '12:00') : clockTime(now);
+    await db.addSlip({ date: past ? date : dateKey(now), time, trigger, ...(note ? { note } : {}) });
     s.body.innerHTML = `
       <div class="stack center">
         <p class="big-reply">${esc(SLIP_REPLIES[trigger])}</p>
         <p class="muted">Your next choice is the one that counts. Never miss twice.</p>
-        <button class="btn primary block" type="button" data-close>Back to today</button>
+        <button class="btn primary block" type="button" data-close>${past ? 'Done' : 'Back to today'}</button>
       </div>`;
     onSaved?.();
   });

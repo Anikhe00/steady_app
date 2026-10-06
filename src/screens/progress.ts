@@ -10,6 +10,7 @@ const TONE_LABEL = {
   all: 'everything done',
   some: 'some done',
   none: 'missed',
+  rest: 'rest day',
   pending: 'in progress',
   outside: 'not tracked',
 } as const;
@@ -55,7 +56,9 @@ export function renderProgress(root: HTMLElement): void {
       </ol>
       <p class="legend small">
         <span><i class="sw all"></i>All done</span><span><i class="sw some"></i>Some</span>
-        <span><i class="sw none"></i>Missed</span><span><i class="sw slip"></i>Slip</span>
+        <span><i class="sw none"></i>Missed</span>${
+          s.week?.some((p) => p.kind === 'rest') ? '<span><i class="sw rest"></i>Rest</span>' : ''
+        }<span><i class="sw slip"></i>Slip</span>
       </p>
       <p class="muted small">Tap a day to fill in anything you forgot.</p>
     </section>

@@ -1,8 +1,9 @@
 import * as db from '../lib/db';
 import { backupFileName, makeBackup, readBackup } from '../lib/backup';
-import { dateKey, fastStartFromWindow, scheduleFromFastStart } from '../lib/dates';
+import { addClock, dateKey, fastStartFromWindow, parseClock, scheduleFromFastStart } from '../lib/dates';
+import { everyDayPlan, ramadanPreset, sunnahPreset, WEEKDAYS } from '../lib/schedule';
 import { isIos, isStandalone, notificationsSupported, requestPermission } from '../lib/reminders';
-import { EATING_HOURS, type FastingPlan, type Settings, type WeightUnit } from '../lib/types';
+import { EATING_HOURS, type DayPlan, type FastingPlan, type Settings, type WeightUnit } from '../lib/types';
 import { esc, formatClock, onAction } from '../ui/dom';
 import { blobToDataUrl, dataUrlToBlob } from '../ui/photo';
 import { confirmSheet, toast } from '../ui/sheet';
@@ -14,6 +15,49 @@ const PLANS: { value: FastingPlan; label: string; hint: string }[] = [
   { value: '20:4', label: '20:4', hint: 'Aggressive' },
 ];
 const SUGGESTIONS = ['Walked 20 minutes', 'Drank 2L of water', 'Veg with lunch', 'In bed by 11', 'No sugary drinks'];
+
+const PRESETS: Record<string, () => DayPlan[]> = {
+  sunnah: () => sunnahPreset(),
+  ramadan: () => ramadanPreset(),
+  usual: everyDayPlan,
+};
+
+/** "Monday 8:00 PM to Tuesday 2:00 PM (18h)" */
+function customSummary(day: number, start: string, hours: number): string {
+  const { h, m } = parseClock(start);
+  const days = Math.floor((h * 60 + m + hours * 60) / 1440);
+  const endDay = days === 0 ? '' : `${WEEKDAYS[(day + days) % 7]} `;
+  return `${WEEKDAYS[day]} ${formatClock(start)} to ${endDay}${formatClock(addClock(start, hours))} (${hours}h)`;
+}
+
+function dayRowHtml(p: DayPlan, i: number, fallback: { start: string; hours: number }): string {
+  const c = p.kind === 'custom' ? p : { start: fallback.start, hours: fallback.hours, dry: false };
+  return `<li class="day-plan" data-day="${i}">
+    <label class="day-row">
+      <span class="day-name">${WEEKDAYS[i]}</span>
+      <select name="kind-${i}" data-kind>
+        <option value="plan" ${p.kind === 'plan' ? 'selected' : ''}>Usual plan</option>
+        <option value="custom" ${p.kind === 'custom' ? 'selected' : ''}>Custom fast</option>
+        <option value="rest" ${p.kind === 'rest' ? 'selected' : ''}>Rest day</option>
+      </select>
+    </label>
+    <div class="day-custom stack" ${p.kind === 'custom' ? '' : 'hidden'}>
+      <div class="row gap">
+        <label class="field grow"><span>Starts</span>
+          <input type="time" name="start-${i}" value="${esc(c.start)}">
+        </label>
+        <label class="field grow"><span>Hours</span>
+          <input type="number" name="hours-${i}" value="${c.hours}" min="1" max="72" step="0.5" inputmode="decimal">
+        </label>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" name="dry-${i}" ${c.dry ? 'checked' : ''}>
+        <span>Dry fast (no food or water)</span>
+      </label>
+      <p class="muted small" data-summary></p>
+    </div>
+  </li>`;
+}
 
 function reminderNote(): string {
   if (notificationsSupported()) {
@@ -69,6 +113,19 @@ export function renderSetup(root: HTMLElement, onboarding: boolean, onDone: () =
           <input type="time" name="fastStart" value="${esc(fastStartFromWindow(s.windowStart, EATING_HOURS[s.plan]))}" required>
         </label>
         <dl class="schedule" data-schedule aria-live="polite"></dl>
+      </section>
+
+      <section class="card stack">
+        <fieldset class="field">
+          <legend class="card-title">Weekly schedule</legend>
+          <span class="muted small">Choose each day's fast. A fast belongs to the day it starts, so a Monday night fast can run into Tuesday. Rest days never count as a miss.</span>
+          <div class="chips suggestions" aria-label="Presets">
+            <button type="button" class="chip-btn" data-action="preset" data-preset="sunnah">Sunnah Mon &amp; Thu</button>
+            <button type="button" class="chip-btn" data-action="preset" data-preset="ramadan">Ramadan</button>
+            <button type="button" class="chip-btn" data-action="preset" data-preset="usual">Usual plan every day</button>
+          </div>
+          <ul class="week-plan" data-week></ul>
+        </fieldset>
       </section>
 
       <section class="card stack">
@@ -139,6 +196,11 @@ export function renderSetup(root: HTMLElement, onboarding: boolean, onDone: () =
         toast('You already have 3 habits. Clear one to swap it.', 'info');
       }
     },
+    preset: (el) => {
+      renderWeek(PRESETS[el.dataset.preset!]());
+      const muslim = el.dataset.preset !== 'usual';
+      toast(muslim ? `Suhoor ${formatClock('05:00')} to Iftar ${formatClock('19:00')}. Adjust to your times, then save.` : 'Schedule updated. Save to keep it.', 'info');
+    },
     export: () => exportBackup(),
     restore: () => fileInput.click(),
   });
@@ -159,6 +221,41 @@ export function renderSetup(root: HTMLElement, onboarding: boolean, onDone: () =
   form.fastStart.addEventListener('input', showSchedule);
   form.querySelectorAll('input[name="plan"]').forEach((el) => el.addEventListener('change', showSchedule));
   showSchedule();
+
+  // Weekly schedule: one row per weekday; custom rows show their own fields.
+  const weekList = root.querySelector<HTMLElement>('[data-week]')!;
+  const renderWeek = (week: DayPlan[]) => {
+    const d = schedule();
+    weekList.innerHTML = week.map((p, i) => dayRowHtml(p, i, { start: d.fastStart, hours: d.fastingHours })).join('');
+    weekList.querySelectorAll<HTMLElement>('.day-plan').forEach(refreshDay);
+  };
+  const refreshDay = (li: HTMLElement) => {
+    const i = Number(li.dataset.day);
+    const custom = li.querySelector<HTMLSelectElement>('[data-kind]')!.value === 'custom';
+    li.querySelector<HTMLElement>('.day-custom')!.hidden = !custom;
+    const start = li.querySelector<HTMLInputElement>(`[name="start-${i}"]`)!.value;
+    const hours = Number(li.querySelector<HTMLInputElement>(`[name="hours-${i}"]`)!.value);
+    li.querySelector<HTMLElement>('[data-summary]')!.textContent = start && hours > 0 ? customSummary(i, start, hours) : '';
+  };
+  const readWeek = (): DayPlan[] | string => {
+    const out: DayPlan[] = [];
+    for (let i = 0; i < 7; i++) {
+      const kind = (form.elements.namedItem(`kind-${i}`) as HTMLSelectElement).value;
+      if (kind !== 'custom') {
+        out.push({ kind: kind === 'rest' ? 'rest' : 'plan' });
+        continue;
+      }
+      const start = (form.elements.namedItem(`start-${i}`) as HTMLInputElement).value;
+      const hours = Number((form.elements.namedItem(`hours-${i}`) as HTMLInputElement).value);
+      if (!start) return `Set a start time for ${WEEKDAYS[i]}'s fast.`;
+      if (!(hours >= 1 && hours <= 72)) return `${WEEKDAYS[i]}'s fast needs a length between 1 and 72 hours.`;
+      out.push({ kind: 'custom', start, hours, dry: (form.elements.namedItem(`dry-${i}`) as HTMLInputElement).checked });
+    }
+    return out;
+  };
+  weekList.addEventListener('input', (e) => refreshDay((e.target as HTMLElement).closest<HTMLElement>('.day-plan')!));
+  weekList.addEventListener('change', (e) => refreshDay((e.target as HTMLElement).closest<HTMLElement>('.day-plan')!));
+  renderWeek(s.week ?? everyDayPlan());
 
   form.remindersOn.addEventListener('change', async () => {
     if (!form.remindersOn.checked) return;
@@ -182,6 +279,8 @@ export function renderSetup(root: HTMLElement, onboarding: boolean, onDone: () =
     };
     if (!why) return fail('Write a short "why". It\'s what you\'ll see on a hard day.', form.why);
     if (labels.length < 2) return fail('Add at least 2 habits.', form.querySelector('input[name="habit"]'));
+    const week = readWeek();
+    if (typeof week === 'string') return fail(week, weekList);
     error.hidden = true;
 
     // Keep ids stable for habits whose label didn't change, so history stays attached.
@@ -194,6 +293,7 @@ export function renderSetup(root: HTMLElement, onboarding: boolean, onDone: () =
       habits,
       unit: f.get('unit') as WeightUnit,
       remindersOn: f.get('remindersOn') === 'on',
+      week,
     });
     toast(onboarding ? "You're set. Day one starts now." : 'Saved');
     onDone();

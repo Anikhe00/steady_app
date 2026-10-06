@@ -1,6 +1,7 @@
 import * as db from '../lib/db';
 import { dateKey, formatDuration } from '../lib/dates';
 import { latestFast, nearestTime, pastTime, toClock, upcomingTime, type FastState } from '../lib/fasting';
+import { goalFor, nextFastAfter, type Schedule } from '../lib/schedule';
 import { formatTime } from './dom';
 import { openSheet, toast } from './sheet';
 
@@ -12,18 +13,19 @@ function sheetError(body: HTMLElement, msg: string) {
   el.hidden = false;
 }
 
-export function openEndFastSheet(state: FastState, eatingHours: number): void {
+export function openEndFastSheet(state: FastState, sched: Schedule): void {
   const now = new Date();
   const start = state.start.getTime();
-  const goalH = Math.round((state.target.getTime() - start) / HOUR);
+  const goal = formatDuration(state.goalHours * HOUR);
   const summary = (end: number) => {
     const done = end - start;
     return done >= state.target.getTime() - start
-      ? `You fasted <strong>${formatDuration(done)}</strong>. That's your ${goalH}h goal reached.`
-      : `You fasted <strong>${formatDuration(done)}</strong> of your ${goalH}h goal. Ending early is okay. Listening to your body is part of the plan.`;
+      ? `You fasted <strong>${formatDuration(done)}</strong>. That's your ${goal} goal reached.`
+      : `You fasted <strong>${formatDuration(done)}</strong> of your ${goal} goal. Ending early is okay. Listening to your body is part of the plan.`;
   };
+  const verb = state.dry ? 'Break' : 'End';
   const s = openSheet(
-    'End your fast',
+    `${verb} your fast`,
     `<form class="stack">
       <p data-summary>${summary(now.getTime())}</p>
       <label class="field"><span>Fast ended at</span>
@@ -31,7 +33,7 @@ export function openEndFastSheet(state: FastState, eatingHours: number): void {
       </label>
       <p class="muted small" data-window></p>
       <p class="form-error" role="alert" hidden></p>
-      <button class="btn primary block" type="submit">End fast</button>
+      <button class="btn primary block" type="submit">${verb} fast</button>
     </form>`,
   );
   const form = s.body.querySelector('form')!;
@@ -40,8 +42,9 @@ export function openEndFastSheet(state: FastState, eatingHours: number): void {
   const refresh = () => {
     const end = endAt();
     form.querySelector('[data-summary]')!.innerHTML = summary(end);
+    const next = nextFastAfter(sched, end);
     form.querySelector('[data-window]')!.textContent =
-      `Your eating window runs until ${formatTime(new Date(end + eatingHours * HOUR))}, then your next fast starts.`;
+      `Your eating window runs until ${dayTime(new Date(next.start), new Date(end))}, then your next fast starts${next.dry ? ' (a dry fast)' : ''}.`;
   };
   input.addEventListener('input', refresh);
   refresh();
@@ -50,15 +53,15 @@ export function openEndFastSheet(state: FastState, eatingHours: number): void {
     e.preventDefault();
     const end = endAt();
     if (end <= start) return sheetError(s.body, `Your fast started at ${formatTime(state.start)}. Pick a time after that.`);
-    await db.putFast({ id: state.fastId, start, end });
+    await db.putFast({ id: state.fastId, start, end, goalHours: state.goalHours, dry: state.dry });
     if (end >= state.target.getTime()) await db.updateDay(dateKey(new Date(end)), { keptFast: true });
     s.close();
-    toast(`Fast ended. Eat until ${formatTime(new Date(end + eatingHours * HOUR))}`);
+    toast(`Fast ended. Eat until ${dayTime(new Date(nextFastAfter(sched, end).start), new Date(end))}`);
   });
 }
 
 /** "at 11:25", or "yesterday at 11:25" / "tomorrow at 11:25" when not today. */
-function dayTime(d: Date, now = new Date()): string {
+export function dayTime(d: Date, now = new Date()): string {
   const diff = Math.round((new Date(d).setHours(0, 0, 0, 0) - new Date(now).setHours(0, 0, 0, 0)) / 86_400_000);
   const day = diff === 0 ? '' : diff === -1 ? 'yesterday ' : diff === 1 ? 'tomorrow ' : `${d.toLocaleDateString(undefined, { weekday: 'short' })} `;
   return `${day}at ${formatTime(d)}`;
@@ -95,16 +98,18 @@ export function openEditStartSheet(state: FastState): void {
     if (prev?.end && start < prev.end) {
       return sheetError(s.body, `Your last fast ended ${dayTime(new Date(prev.end))}. Pick a time after that.`);
     }
-    await db.putFast({ id: state.fastId, start });
+    await db.putFast({ id: state.fastId, start, goalHours: state.goalHours, dry: state.dry });
     s.close();
     toast(`Fast starts ${dayTime(new Date(start))}`);
   });
 }
 
-export async function startFastNow(): Promise<void> {
+export async function startFastNow(sched: Schedule): Promise<void> {
   // A fast already set for later just starts now instead.
-  const scheduled = db.data.fasts.find((f) => f.end === undefined && f.start > Date.now());
-  await db.putFast(scheduled ? { ...scheduled, start: Date.now() } : { start: Date.now() });
+  const now = Date.now();
+  const scheduled = db.data.fasts.find((f) => f.end === undefined && f.start > now);
+  const { hours, dry } = goalFor(sched, now);
+  await db.putFast(scheduled ? { ...scheduled, start: now } : { start: now, goalHours: hours, dry });
   toast('Fast started');
 }
 

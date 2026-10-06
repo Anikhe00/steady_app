@@ -1,21 +1,27 @@
 import { at, dateKey, addDays, parseClock, type FastingStatus } from './dates';
-import type { ClockTime, FastRecord } from './types';
+import { everyDayPlan, goalFor, lastScheduledFast, nextFastAfter, scheduleOf, type PlannedFast, type Schedule } from './schedule';
+import type { ClockTime, DayPlan, FastRecord, Settings } from './types';
 
 // Fasts are driven by you: a fast only ends when you end it. The eating
 // window then runs from that moment for the plan's eating hours, and the next
 // fast starts when that window closes (or earlier, if you start it yourself).
+// The weekly schedule (./schedule) can move that start and set the goal.
 // A fast that starts because the window closed isn't saved until you end or
 // edit it; it's derived from the last fast you ended.
 
 const HOUR = 3_600_000;
 
 export interface FastState extends FastingStatus {
-  /** Fasting: past the plan's target length. */
+  /** Fasting: past the goal. */
   over: boolean;
-  /** Fasting: the planned end (start + fasting hours). */
+  /** Fasting: the goal end (start + goal hours). Eating: when the next fast starts. */
   target: Date;
   /** The saved fast this state belongs to: the running fast, or the one just ended. */
   fastId: string | null;
+  /** The goal of the running fast, or (eating) of the next one. */
+  goalHours: number;
+  /** That fast is dry: no food or water. */
+  dry: boolean;
 }
 
 /** The most recent time the clock read `t`, at or before `now`. */
@@ -28,9 +34,15 @@ export function latestFast(fasts: FastRecord[]): FastRecord | null {
   return fasts.reduce<FastRecord | null>((a, b) => (!a || b.start > a.start ? b : a), null);
 }
 
-/** When the eating window after an ended fast closes, i.e. when the next fast starts. */
-export function nextFastStart(f: FastRecord, eatingHours: number): number {
-  return f.nextStart ?? f.end! + eatingHours * HOUR;
+/** The next fast after an ended one: where you moved it, or what the schedule says. */
+export function nextFast(f: FastRecord, sched: Schedule): PlannedFast {
+  if (f.nextStart !== undefined) return { start: f.nextStart, ...goalFor(sched, f.nextStart) };
+  return nextFastAfter(sched, f.end!);
+}
+
+/** A saved fast's goal: the one it started with, or its day's goal for older records. */
+export function goalOf(f: FastRecord, sched: Schedule): { hours: number; dry: boolean } {
+  return f.goalHours !== undefined ? { hours: f.goalHours, dry: !!f.dry } : goalFor(sched, f.start);
 }
 
 export function fastState(
@@ -38,27 +50,30 @@ export function fastState(
   fasts: FastRecord[],
   eatingHours: number,
   usualFastStart: ClockTime,
+  week: DayPlan[] = everyDayPlan(),
 ): FastState {
-  const fastingMs = (24 - eatingHours) * HOUR;
+  const sched: Schedule = { eatingHours, usualStart: usualFastStart, week };
   const t = now.getTime();
   const last = latestFast(fasts);
 
-  const fasting = (start: number, fastId: string | null): FastState => {
-    const target = start + fastingMs;
+  const fasting = (start: number, fastId: string | null, goal: { hours: number; dry: boolean }): FastState => {
+    const target = start + goal.hours * HOUR;
     return {
       phase: 'fasting',
       start: new Date(start),
       end: new Date(target),
       target: new Date(target),
       remainingMs: Math.max(0, target - t),
-      progress: Math.min(1, Math.max(0, (t - start) / fastingMs)),
+      progress: Math.min(1, Math.max(0, (t - start) / (goal.hours * HOUR))),
       over: t >= target,
       windowDay: dateKey(new Date(target)),
       fastId,
+      goalHours: goal.hours,
+      dry: goal.dry,
     };
   };
 
-  const eating = (opened: number, close: number, fastId: string): FastState => {
+  const eating = (opened: number, close: number, fastId: string, next: { hours: number; dry: boolean }): FastState => {
     const total = Math.max(1, close - opened);
     return {
       phase: 'eating',
@@ -70,23 +85,34 @@ export function fastState(
       over: false,
       windowDay: dateKey(new Date(opened)),
       fastId,
+      goalHours: next.hours,
+      dry: next.dry,
     };
   };
 
-  // Nothing logged yet: assume the fast began at your usual start time.
-  if (!last) return fasting(lastOccurrence(now, usualFastStart).getTime(), null);
+  // Nothing logged yet: assume the fast began at the last scheduled start.
+  if (!last) {
+    const f = lastScheduledFast(sched, now);
+    return fasting(f.start, null, f);
+  }
   if (last.end === undefined) {
-    if (last.start <= t) return fasting(last.start, last.id);
+    if (last.start <= t) return fasting(last.start, last.id, goalOf(last, sched));
     // A fast set to start later: you're still in your eating window until then.
     const prev = latestFast(fasts.filter((f) => f.id !== last.id && f.end !== undefined));
-    return eating(Math.min(prev?.end ?? t, t), last.start, last.id);
+    return eating(Math.min(prev?.end ?? t, t), last.start, last.id, goalOf(last, sched));
   }
 
-  const close = nextFastStart(last, eatingHours);
-  if (t < close) return eating(last.end, close, last.id);
+  const next = nextFast(last, sched);
+  if (t < next.start) return eating(last.end, next.start, last.id, next);
   // The eating window closed, so the next fast is under way.
-  return fasting(close, null);
+  return fasting(next.start, null, next);
 }
+
+/** The fasting state for saved settings. */
+export const fastStateFor = (s: Settings, fasts: FastRecord[], now = new Date()): FastState => {
+  const sched = scheduleOf(s);
+  return fastState(now, fasts, sched.eatingHours, sched.usualStart, sched.week);
+};
 
 /** Minutes → "HH:MM", for pre-filling time inputs. */
 export function toClock(d: Date): ClockTime {

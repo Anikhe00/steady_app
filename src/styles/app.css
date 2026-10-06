@@ -1000,6 +1000,10 @@ a.tile:focus-visible {
   border: 0;
   background: var(--tile-none);
 }
+.tile[data-tone='rest'] .tile-dot {
+  border-style: dotted;
+  opacity: 0.6;
+}
 .tile[data-tone='pending'] .tile-dot {
   border-color: var(--text-muted);
 }
@@ -1041,6 +1045,9 @@ a.tile:focus-visible {
 }
 .sw.none {
   background: var(--tile-none);
+}
+.sw.rest {
+  border: 1.5px dotted var(--line);
 }
 .sw.slip {
   background: var(--slip);
@@ -1357,4 +1364,46 @@ details summary {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* ---------- weekly schedule */
+
+.week-plan {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.day-plan {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.day-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.day-name {
+  font-weight: 600;
+}
+.day-row select {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  max-width: 60%;
+}
+.day-custom[hidden] {
+  display: none;
+}
+.day-custom .row > .field {
+  min-width: 0;
 }

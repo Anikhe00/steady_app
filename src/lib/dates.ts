@@ -116,22 +116,26 @@ export interface StreakResult {
  * "Never miss twice": walk back from today counting days that counted.
  * A single missed day is forgiven; two misses in a row end the run.
  * Today never counts as a miss (it isn't over yet), and days before
- * `startDate` are not part of the history.
+ * `startDate` are not part of the history. A rest day that didn't count is
+ * skipped: it neither adds to the run nor counts as a miss.
  */
 export function neverMissTwiceStreak(
   counted: (day: DateKey) => boolean,
   today: DateKey,
   startDate: DateKey,
+  rest: (day: DateKey) => boolean = () => false,
 ): StreakResult {
   let streak = counted(today) ? 1 : 0;
   let misses = 0;
   let day = addDays(today, -1);
-  const missedYesterday = day >= startDate && !counted(day);
+  const missedYesterday = day >= startDate && !counted(day) && !rest(day);
 
   while (day >= startDate) {
     if (counted(day)) {
       streak++;
       misses = 0;
+    } else if (rest(day)) {
+      // Neutral: carries on to the day before.
     } else {
       misses++;
       if (misses >= 2) break;

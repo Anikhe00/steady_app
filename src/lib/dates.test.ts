@@ -134,6 +134,20 @@ describe('schedule from fast start', () => {
   });
 });
 
+describe('neverMissTwiceStreak with rest days', () => {
+  const days = (list: string[]) => (d: string) => list.includes(d);
+  it('skips rest days without breaking or adding to the run', () => {
+    // Rest on the 29th and 30th, nothing logged: still one run of 3.
+    const r = neverMissTwiceStreak(days(['2026-09-27', '2026-09-28', '2026-10-01']), '2026-10-01', '2026-09-27', days(['2026-09-29', '2026-09-30']));
+    expect(r.streak).toBe(3);
+    expect(r.missedYesterday).toBe(false);
+  });
+  it('still counts a rest day you showed up on', () => {
+    const r = neverMissTwiceStreak(days(['2026-09-29', '2026-09-30']), '2026-09-30', '2026-09-29', days(['2026-09-29']));
+    expect(r.streak).toBe(2);
+  });
+});
+
 describe('isDateKey', () => {
   it('accepts real dates and rejects anything else', () => {
     expect(isDateKey('2026-10-03')).toBe(true);

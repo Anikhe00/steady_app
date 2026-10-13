@@ -1,9 +1,10 @@
 import * as db from '../lib/db';
 import { dateKey, formatDuration } from '../lib/dates';
-import { latestFast, nearestTime, pastTime, toClock, upcomingTime, type FastState } from '../lib/fasting';
+import { latestFast, pastTime, toClock, upcomingTime, type FastState } from '../lib/fasting';
 import { goalFor, nextFastAfter, type Schedule } from '../lib/schedule';
 import { formatTime } from './dom';
 import { openSheet, toast } from './sheet';
+import { createWheel } from './wheel';
 
 const HOUR = 3_600_000;
 
@@ -67,31 +68,61 @@ export function dayTime(d: Date, now = new Date()): string {
   return `${day}at ${formatTime(d)}`;
 }
 
+const CLOCK_ICON =
+  '<svg class="title-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>';
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
 export function openEditStartSheet(state: FastState): void {
   const prev = latestFast(db.data.fasts.filter((f) => f.id !== state.fastId && f.end !== undefined));
+  const now = new Date();
+  const today = new Date(now).setHours(0, 0, 0, 0);
+  // Two weeks back (further if the fast began earlier) through tomorrow.
+  const startDay = new Date(state.start).setHours(0, 0, 0, 0);
+  const d = new Date(today);
+  d.setDate(d.getDate() - 13);
+  if (startDay < d.getTime()) d.setTime(startDay);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const days: Date[] = [];
+  for (; d <= tomorrow; d.setDate(d.getDate() + 1)) days.push(new Date(d));
+  const dayLabel = (d: Date) =>
+    d.getTime() === today ? 'Today' : d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+
   const s = openSheet(
-    'Edit fast start',
+    'Select start time',
     `<form class="stack">
-      <p class="muted">When did you finish your last bite? You can also pick a time later today if you haven't started yet.</p>
-      <label class="field"><span>Fast starts at</span>
-        <input type="time" name="start" value="${toClock(state.start)}" required>
-      </label>
-      <p class="muted small" data-when></p>
+      <div data-wheel></div>
+      <p class="muted small center" data-when></p>
       <p class="form-error" role="alert" hidden></p>
-      <button class="btn primary block" type="submit">Save</button>
     </form>`,
+    undefined,
+    { confirmLabel: 'Save start time', titleIcon: CLOCK_ICON },
   );
   const form = s.body.querySelector('form')!;
-  const input = form.elements.namedItem('start') as HTMLInputElement;
-  const startAt = () => nearestTime(new Date(), input.value || toClock(state.start));
+  const wheel = createWheel(
+    [
+      { label: 'Day', options: days.map(dayLabel), index: days.findIndex((d) => d.getTime() === startDay), align: 'end' },
+      { label: 'Hour', options: Array.from({ length: 24 }, (_, i) => pad2(i)), index: state.start.getHours() },
+      { label: 'Minute', options: Array.from({ length: 60 }, (_, i) => pad2(i)), index: state.start.getMinutes(), align: 'start' },
+    ],
+    () => refresh(),
+  );
+  form.querySelector('[data-wheel]')!.replaceWith(wheel.el);
+
+  const startAt = () => {
+    const [d, h, m] = wheel.values();
+    const t = new Date(days[d]);
+    t.setHours(h, m, 0, 0);
+    return t;
+  };
   const when = form.querySelector<HTMLElement>('[data-when]')!;
   const refresh = () => {
     const d = startAt();
     when.textContent = d > new Date() ? `Your fast will start ${dayTime(d)}. Until then you're in your eating window.` : `Fast started ${dayTime(d)}.`;
   };
-  input.addEventListener('input', refresh);
   refresh();
 
+  s.dialog.querySelector('[data-confirm]')!.addEventListener('click', () => form.requestSubmit());
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const start = startAt().getTime();

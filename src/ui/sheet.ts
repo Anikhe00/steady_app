@@ -7,18 +7,34 @@ export interface SheetHandle {
   close: () => void;
 }
 
-export function openSheet(title: string, bodyHtml: string, onClose?: () => void): SheetHandle {
+export interface SheetOptions {
+  /** Picker layout: close on the left, centred title, a check button (`data-confirm`) on the right. */
+  confirmLabel?: string;
+  /** Inline SVG shown after a centred title. */
+  titleIcon?: string;
+}
+
+const CLOSE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+
+export function openSheet(title: string, bodyHtml: string, onClose?: () => void, opts: SheetOptions = {}): SheetHandle {
   const dialog = document.createElement('dialog');
   dialog.className = 'sheet';
   dialog.setAttribute('aria-labelledby', 'sheet-title');
+  const head = opts.confirmLabel
+    ? `<header class="sheet-head picker">
+        <button type="button" class="icon-btn round-close" data-close aria-label="Close">${CLOSE_ICON}</button>
+        <h2 id="sheet-title">${title}${opts.titleIcon ?? ''}</h2>
+        <button type="button" class="icon-btn confirm" data-confirm aria-label="${opts.confirmLabel}">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+        </button>
+      </header>`
+    : `<header class="sheet-head">
+        <h2 id="sheet-title">${title}</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">${CLOSE_ICON}</button>
+      </header>`;
   dialog.innerHTML = `
     <div class="sheet-inner">
-      <header class="sheet-head">
-        <h2 id="sheet-title">${title}</h2>
-        <button type="button" class="icon-btn" data-close aria-label="Close">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
-        </button>
-      </header>
+      ${head}
       <div class="sheet-body">${bodyHtml}</div>
     </div>`;
   document.body.append(dialog);

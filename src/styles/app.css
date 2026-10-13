@@ -1407,3 +1407,118 @@ details summary {
 .day-custom .row > .field {
   min-width: 0;
 }
+
+/* ---------- picker sheet (close / title / confirm) and scroll wheel */
+
+.sheet-head.picker {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  gap: 8px;
+  padding: 12px 0 4px;
+}
+.sheet-head.picker h2 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-family: var(--font-body);
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+.sheet-head.picker .title-icon {
+  width: 22px;
+  height: 22px;
+  color: var(--text-muted);
+}
+.icon-btn.round-close svg {
+  width: 30px;
+  height: 30px;
+  padding: 7px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+.icon-btn.confirm {
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--on-primary);
+}
+.icon-btn.confirm svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 2.6;
+}
+.center {
+  text-align: center;
+}
+
+.wheel {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  height: var(--wheel-h);
+  margin: 8px 0 4px;
+  isolation: isolate;
+  font-variant-numeric: tabular-nums;
+  -webkit-mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent);
+  mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent);
+}
+.wheel-band {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(50% - var(--row-h) / 2);
+  height: var(--row-h);
+  border-radius: 12px;
+  background: var(--surface-2);
+  pointer-events: none;
+  z-index: -1;
+}
+.wheel-col {
+  position: relative;
+  height: 100%;
+  overflow: hidden auto;
+  scroll-snap-type: y mandatory;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  perspective: 600px;
+  outline-offset: -2px;
+  border-radius: 12px;
+  touch-action: pan-y;
+}
+.wheel-col::-webkit-scrollbar {
+  display: none;
+}
+.wheel-col:first-child {
+  flex: 0 1 10.5em;
+  min-width: 0;
+}
+.wheel-col:not(:first-child) {
+  flex: none;
+  width: 64px;
+}
+.wheel-row {
+  height: var(--row-h);
+  line-height: var(--row-h);
+  padding-inline: 10px;
+  scroll-snap-align: center;
+  white-space: nowrap;
+  font-size: 1.2rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  transform-origin: center;
+  user-select: none;
+}
+.wheel-row.on {
+  font-size: 1.45rem;
+  font-weight: 500;
+  color: var(--text);
+}
+.wheel-col[data-align='end'] .wheel-row {
+  text-align: end;
+}
+.wheel-col[data-align='start'] .wheel-row {
+  text-align: start;
+}
+.wheel-col[data-align='center'] .wheel-row {
+  text-align: center;
+}
